@@ -93,6 +93,7 @@ class Point:
         self.is_ground=height_above_ground<0
         self.enabled=True
         self.descendents=None
+        self.cluster=-1
     
 
     def __repr__(self):
@@ -120,6 +121,9 @@ def filter_for_enabled(points_list):
 def filter_for_disabled(points_list):
     return [point for point in points_list if not point.enabled]
 
+def filter_for_unclustered(points_list):
+    return [point for point in points_list if point.cluster<0]
+
 def squared_horizontal_distance(point1, point2):
     return (point1.xyz[0]-point2.xyz[0])**2+(point1.xyz[1]-point2.xyz[1])**2
 
@@ -131,19 +135,41 @@ def downsample(arr, fraction):
     cutoff_point=int(arr.shape[0]*fraction)
     return arr[:cutoff_point]
 
+def assign_to_nearest_stem_center(point_cloud, stems, height_cutoff=0.2):
+    stem_centers=[Point(sum([point.xyz for point in stem])/len(stem),0) for stem in stems]
+    # point_to_stem_center_horizontal_distances=np.array([[squared_horizontal_distance(cloud_point, stem_center) for cloud_point in point_cloud.points] for stem_center in stem_centers])
+    for point in point_cloud.points:
+        if point.height_above_ground<height_cutoff:
+            point.cluster=0
+        else:
+            squared_horizontal_distance_to_stem_centers=np.array([squared_horizontal_distance(point, stem_center) for stem_center in stem_centers])
+            point.cluster=1+np.argmin(squared_horizontal_distance_to_stem_centers)
+
+
+def assign_to_clusters(point_cloud, stems):
+    #assign the ground to cluster 0
+    for point in point_cloud.points:
+        if point.is_ground:
+            point.cluster=0
+    for stem in stems:
+
+
+
+
+        pass
+
 def plot_stem_centers(point_cloud, stems, include_ground=True, save_title=None):
     plt.close()
+    assign_to_nearest_stem_center(point_cloud,stems)
     stem_centers=[Point(sum([point.xyz for point in stem])/len(stem),0) for stem in stems]
-    point_to_stem_center_horizontal_distances=np.array([[squared_horizontal_distance(cloud_point, stem_center) for cloud_point in point_cloud.points] for stem_center in stem_centers])
-    point_to_nearest_stem_distances=np.amin(point_to_stem_center_horizontal_distances, axis=0)
+    # point_to_stem_center_horizontal_distances=np.array([[squared_horizontal_distance(cloud_point, stem_center) for cloud_point in point_cloud.points] for stem_center in stem_centers])
+    # point_to_nearest_stem_distances=np.amin(point_to_stem_center_horizontal_distances, axis=0)
     
     colors=['blue', 'green', 'purple', 'yellow', 'black', 'grey', 'teal']
     num_colors=len(colors)
 
     for i in range(len(stem_centers)):
-        neighborhood=[point for j, point in enumerate(point_cloud.points) 
-            if point_to_stem_center_horizontal_distances[i,j]==point_to_nearest_stem_distances[j]
-                and (include_ground or point.height_above_ground>0.2)]
+        neighborhood=list(filter(lambda x: x.cluster==i+1, point_cloud.points))
         x=[point.xyz[0] for point in neighborhood]
         y=[point.xyz[1] for point in neighborhood]
         plt.scatter(x=x, y=y, color=colors[i%num_colors], alpha=.1)
@@ -165,11 +191,11 @@ if __name__=="__main__":
         # "Test_data/treeID_34926_merged.las", # >10 stems
         # "Test_data/treeID_35618_merged.las", # >10 stems
         "Test_data/treeID_40038_merged.las", # 2 stems
-        "Test_data/treeID_40061_merged.las", # 13 stems
+        # "Test_data/treeID_40061_merged.las", # 13 stems
         "Test_data/treeID_40113_merged.las", # 3 stems
         "Test_data/treeID_40645_merged.las", # 2 stems
         "Test_data/treeID_40803_merged.las", # 4 stems
-        "Test_data/treeID_42113_merged.las", # 11 stems
+        # "Test_data/treeID_42113_merged.las", # 11 stems
     ]
 
     for file_name in file_names:
