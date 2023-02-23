@@ -99,18 +99,22 @@ class Point:
     def __repr__(self):
         return str(list(self.xyz)+[self.height_above_ground, self.enabled])
 
-    def find_descendents(self, points_to_check, horizontal_radius=.2, height_difference=.3):
+    def find_descendents(self, points_to_check, horizontal_radius=.2, height_above_self=0, height_below_self=0.3):
         if not self.descendents:
-            points_to_check=filter(lambda point: point.z()<self.z(), points_to_check)
-            points_to_check=list(filter(lambda point: point.z()+height_difference>self.z(), points_to_check))
-            squared_distances=np.zeros(len(points_to_check))
-            for dim in range(2):
-                distance_on_this_dimension=self.xyz[dim]-np.array([point.xyz[dim] for point in points_to_check])
-                squared_distances+=distance_on_this_dimension**2
-            self.descendents=[point for point, squared_distance in zip(points_to_check, squared_distances) if squared_distance<horizontal_radius**2]
-
+            self.descendents=self.find_points_in_cylinder(points_to_check, horizontal_radius=horizontal_radius, height_above_self=height_above_self, height_below_self=height_below_self)
         self.descendents=filter_for_enabled(self.descendents)
         return self.descendents
+
+
+    def find_points_in_cylinder(self, points_to_check, horizontal_radius=.2, height_above_self=0, height_below_self=0.3):
+        points_to_check=filter(lambda point: -1*height_below_self<point.z()-self.z(), points_to_check)
+        points_to_check=list(filter(lambda point: height_above_self>point.z()-self.z(), points_to_check))
+        squared_distances=np.zeros(len(points_to_check))
+        for dim in range(2):
+            distance_on_this_dimension=self.xyz[dim]-np.array([point.xyz[dim] for point in points_to_check])
+            squared_distances+=distance_on_this_dimension**2
+        points_in_cylinder=[point for point, squared_distance in zip(points_to_check, squared_distances) if squared_distance<horizontal_radius**2]
+        return points_in_cylinder
 
     def z(self):
         return self.xyz[2]
@@ -120,6 +124,12 @@ def filter_for_enabled(points_list):
 
 def filter_for_disabled(points_list):
     return [point for point in points_list if not point.enabled]
+
+def filter_for_clustered(points_list):
+    return [point for point in points_list if point.cluster>=0]
+
+def filter_for_clustered_non_ground(points_list):
+    return [point for point in points_list if point.cluster>0]
 
 def filter_for_unclustered(points_list):
     return [point for point in points_list if point.cluster<0]
@@ -135,7 +145,7 @@ def downsample(arr, fraction):
     cutoff_point=int(arr.shape[0]*fraction)
     return arr[:cutoff_point]
 
-def assign_to_nearest_stem_center(point_cloud, stems, height_cutoff=0.2):
+def assign_clusters_by_nearest(point_cloud, stems, height_cutoff=0.2):
     stem_centers=[Point(sum([point.xyz for point in stem])/len(stem),0) for stem in stems]
     # point_to_stem_center_horizontal_distances=np.array([[squared_horizontal_distance(cloud_point, stem_center) for cloud_point in point_cloud.points] for stem_center in stem_centers])
     for point in point_cloud.points:
@@ -146,37 +156,63 @@ def assign_to_nearest_stem_center(point_cloud, stems, height_cutoff=0.2):
             point.cluster=1+np.argmin(squared_horizontal_distance_to_stem_centers)
 
 
-def assign_to_clusters(point_cloud, stems):
-    #assign the ground to cluster 0
+def assign_clusters_by_growing(point_cloud, stems, grow_radius=.2, grow_height=.4, height_cutoff=0.2):
+    #assigns points to clusters based on "growing" the stem
+
+    #the ground is cluster 0
     for point in point_cloud.points:
-        if point.is_ground:
+        if point.height_above_ground<height_cutoff:
             point.cluster=0
-    for stem in stems:
+    for i, stem in enumerate(stems):
+        growing_points=[stem_point for stem_point in stem]
+        while growing_points:
+            unclustered_points=filter_for_unclustered(point_cloud.points)
+            point_to_grow=growing_points.pop()
+            upwards_points=point_to_grow.find_points_in_cylinder(unclustered_points, horizontal_radius=grow_radius, height_above_self=grow_height, height_below_self=0)
+            print(f"Found {len(upwards_points)} new points for cluster {i+1}/{len(stems)}")
+            for upward_point in upwards_points:
+                upward_point.cluster=i+1
+                growing_points.append(upward_point)
+    #if any points are not assigned to a cluster, this finishes the process:
+    cluster_remaining_points_to_nearest_neighbor(point_cloud)
 
 
+def cluster_remaining_points_to_nearest_neighbor(point_cloud):
+    #assigns points to existing clusters based on which cluster it is currently closest to
+    out_of_cluster_points=filter_for_unclustered(point_cloud.points)
+    in_cluster_points=filter_for_clustered_non_ground(point_cloud.points)
+    for point in out_of_cluster_points:
+        nearest_point=min(in_cluster_points, key=lambda x: squared_distance(x, point))
+        point.cluster=nearest_point.cluster
 
-
-        pass
-
-def plot_stem_centers(point_cloud, stems, include_ground=True, save_title=None):
+def plot_stem_centers(point_cloud, stems, include_ground=True, save_title=None, show_unclustered=False):
     plt.close()
-    assign_to_nearest_stem_center(point_cloud,stems)
-    stem_centers=[Point(sum([point.xyz for point in stem])/len(stem),0) for stem in stems]
-    # point_to_stem_center_horizontal_distances=np.array([[squared_horizontal_distance(cloud_point, stem_center) for cloud_point in point_cloud.points] for stem_center in stem_centers])
-    # point_to_nearest_stem_distances=np.amin(point_to_stem_center_horizontal_distances, axis=0)
-    
-    colors=['blue', 'green', 'purple', 'yellow', 'black', 'grey', 'teal']
-    num_colors=len(colors)
+    # assign_clusters_by_nearest(point_cloud,stems)
+    assign_clusters_by_growing(point_cloud, stems)
 
-    for i in range(len(stem_centers)):
-        neighborhood=list(filter(lambda x: x.cluster==i+1, point_cloud.points))
-        x=[point.xyz[0] for point in neighborhood]
-        y=[point.xyz[1] for point in neighborhood]
-        plt.scatter(x=x, y=y, color=colors[i%num_colors], alpha=.1)
+    stem_centers=[Point(sum([point.xyz for point in stem])/len(stem),0) for stem in stems]
+    
+    colors=['blue', 'green', 'purple', 'yellow', 'black', 'orange', 'cyan', 'maroon', 'brown']
+    num_colors=len(colors)
 
     stem_center_x=[stem_center.xyz[0] for stem_center in stem_centers]
     stem_center_y=[stem_center.xyz[1] for stem_center in stem_centers]
-    plt.scatter(x=stem_center_x, y=stem_center_y, color='red', marker='x')
+    plt.scatter(x=stem_center_x, y=stem_center_y, color='red', marker='x', label='Stem Centers')
+
+    for i in range(len(stem_centers)):
+        neighborhood=[point for point in point_cloud.points if point.cluster==i+1]
+        x=[point.xyz[0] for point in neighborhood]
+        y=[point.xyz[1] for point in neighborhood]
+        plt.scatter(x=x, y=y, color=colors[i%num_colors], alpha=.1, label=f'Tree {i+1}')
+    if show_unclustered:
+        neighborhood=[point for point in point_cloud.points if point.cluster==-1]
+        x=[point.xyz[0] for point in neighborhood]
+        y=[point.xyz[1] for point in neighborhood]
+        plt.scatter(x=x, y=y, color='grey', alpha=.1, label=f'Unclustered Points')
+
+    leg = plt.legend()
+    for lh in leg.legendHandles: 
+        lh.set_alpha(1)
     plt.title(save_title)
     if save_title:
         plt.savefig(fname=f"saved_images/{save_title}")
@@ -190,11 +226,11 @@ if __name__=="__main__":
         # "Test_data/treeID_33009.las", # 1 stem
         # "Test_data/treeID_34926_merged.las", # >10 stems
         # "Test_data/treeID_35618_merged.las", # >10 stems
-        "Test_data/treeID_40038_merged.las", # 2 stems
+        # "Test_data/treeID_40038_merged.las", # 2 stems
         # "Test_data/treeID_40061_merged.las", # 13 stems
-        "Test_data/treeID_40113_merged.las", # 3 stems
+        # "Test_data/treeID_40113_merged.las", # 3 stems
         "Test_data/treeID_40645_merged.las", # 2 stems
-        "Test_data/treeID_40803_merged.las", # 4 stems
+        # "Test_data/treeID_40803_merged.las", # 9ish stems
         # "Test_data/treeID_42113_merged.las", # 11 stems
     ]
 
