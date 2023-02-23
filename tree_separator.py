@@ -114,13 +114,11 @@ class Point:
     def z(self):
         return self.xyz[2]
 
-
 def filter_for_enabled(points_list):
     return [point for point in points_list if point.enabled]
 
 def filter_for_disabled(points_list):
     return [point for point in points_list if not point.enabled]
-
 
 def squared_horizontal_distance(point1, point2):
     return (point1.xyz[0]-point2.xyz[0])**2+(point1.xyz[1]-point2.xyz[1])**2
@@ -128,29 +126,10 @@ def squared_horizontal_distance(point1, point2):
 def squared_distance(point1, point2):
     return (point1.xyz[0]-point2.xyz[0])**2+(point1.xyz[1]-point2.xyz[1])**2+(point1.xyz[2]-point2.xyz[2])**2
 
-
-
 def downsample(arr, fraction):
     np.random.shuffle(arr)
     cutoff_point=int(arr.shape[0]*fraction)
     return arr[:cutoff_point]
-
-def choose_guide_points(point_cloud, radius_of_density=1.4):
-    downsample_fraction=1/np.sqrt(point_cloud.shape[0])
-    downsample_fraction=1
-    guide_points=downsample(point_cloud, downsample_fraction)
-    squared_distances=np.zeros((point_cloud.shape[0], guide_points.shape[0]))
-    for dim in range(3):
-        points_one_dimension=point_cloud[:, dim]
-        points_one_dimension=np.expand_dims(points_one_dimension, 1)
-
-        guide_points_one_dimension=guide_points[:,dim]
-        guide_points_one_dimension=np.expand_dims(guide_points_one_dimension, 0)
-
-        differences=np.subtract(points_one_dimension,guide_points_one_dimension)
-        squared_distances+=differences**2
-    adjacencies=squared_distances<radius_of_density**2
-    return adjacencies
 
 def plot_stem_centers(point_cloud, stems, include_ground=True, save_title=None):
     plt.close()
@@ -176,7 +155,6 @@ def plot_stem_centers(point_cloud, stems, include_ground=True, save_title=None):
     if save_title:
         plt.savefig(fname=f"saved_images/{save_title}")
     return
-
 
 
 if __name__=="__main__":
