@@ -43,10 +43,16 @@ class Point_Cloud:
                         stem_grounded=True
                 else:
                     # if the point has no descendent, it cannot have a path to the ground, so we disable it
-                    active_point.enabled=False
-                    stem.pop(-1)
+                    n_points_start=len(self.enabled_points())
+                    self.disable_stem_region([active_point], .2)
+                    n_points_end=len(self.enabled_points())
+                    print(f"We exploded {n_points_start-n_points_end} points!")
+                    # active_point.enabled=False
+                    while stem and not stem[-1].enabled:
+                        stem.pop()
         if stem_grounded:
             # we've found a stem
+            print("Found a stem!")
             return stem
         else:
             # if the point cloud cannot find a new stem, we stop
@@ -60,19 +66,21 @@ class Point_Cloud:
 
 
 
-    def plot(self, stem=None, disabled_color='green'):
+    def plot(self, stem=None, disabled_color='green', theta=0):
         plt.close()
         enabled_point_cloud=self.enabled_points()
-        x=[point.xyz[0] for point in enabled_point_cloud]
+        sin=math.sin(theta*180/math.pi)
+        cos=math.cos(theta*180/math.pi)
+        x=[point.xyz[0]*cos+point.xyz[1]*sin for point in enabled_point_cloud]
         z=[point.xyz[2] for point in enabled_point_cloud]
         plt.scatter(x=x, y=z, color='blue')
         if disabled_color:
             disabled_point_cloud=filter_for_disabled(self.points)
-            x=[point.xyz[0] for point in disabled_point_cloud]
+            x=[point.xyz[0]*cos+point.xyz[1]*sin for point in disabled_point_cloud]
             z=[point.xyz[2] for point in disabled_point_cloud]
             plt.scatter(x=x, y=z, color='green')
         if stem:
-            x_stem=[stem_point.xyz[0] for stem_point in stem]
+            x_stem=[stem_point.xyz[0]*cos+stem_point.xyz[1]*sin for stem_point in stem]
             z_stem=[stem_point.xyz[2] for stem_point in stem]
             plt.scatter(x=x_stem, y=z_stem, color='red')
 
@@ -85,6 +93,7 @@ class Point:
         self.is_ground=height_above_ground<0
         self.enabled=True
         self.descendents=None
+    
 
     def __repr__(self):
         return str(list(self.xyz)+[self.height_above_ground, self.enabled])
@@ -114,7 +123,7 @@ def filter_for_disabled(points_list):
 
 
 def squared_horizontal_distance(point1, point2):
-    return (point1[0]-point2[0])**2+(point1[1]-point2[1])**2
+    return (point1.xyz[0]-point2.xyz[0])**2+(point1.xyz[1]-point2.xyz[1])**2
 
 def squared_distance(point1, point2):
     return (point1.xyz[0]-point2.xyz[0])**2+(point1.xyz[1]-point2.xyz[1])**2+(point1.xyz[2]-point2.xyz[2])**2
@@ -143,74 +152,71 @@ def choose_guide_points(point_cloud, radius_of_density=1.4):
     adjacencies=squared_distances<radius_of_density**2
     return adjacencies
 
-def plot_stem_centers(point_cloud, stem_centers):
+def plot_stem_centers(point_cloud, stems, include_ground=True, save_title=None):
     plt.close()
-    enabled_point_cloud=point_cloud.points
-    x=[point.xyz[0] for point in enabled_point_cloud]
-    y=[point.xyz[1] for point in enabled_point_cloud]
-    plt.scatter(x=x, y=y, color='blue', alpha=.005)
-    stem_center_x=[stem_center[0] for stem_center in stem_centers]
-    stem_center_y=[stem_center[1] for stem_center in stem_centers]
+    stem_centers=[Point(sum([point.xyz for point in stem])/len(stem),0) for stem in stems]
+    point_to_stem_center_horizontal_distances=np.array([[squared_horizontal_distance(cloud_point, stem_center) for cloud_point in point_cloud.points] for stem_center in stem_centers])
+    point_to_nearest_stem_distances=np.amin(point_to_stem_center_horizontal_distances, axis=0)
+    
+    colors=['blue', 'green', 'purple', 'yellow', 'black', 'grey', 'teal']
+    num_colors=len(colors)
+
+    for i in range(len(stem_centers)):
+        neighborhood=[point for j, point in enumerate(point_cloud.points) 
+            if point_to_stem_center_horizontal_distances[i,j]==point_to_nearest_stem_distances[j]
+                and (include_ground or point.height_above_ground>0.2)]
+        x=[point.xyz[0] for point in neighborhood]
+        y=[point.xyz[1] for point in neighborhood]
+        plt.scatter(x=x, y=y, color=colors[i%num_colors], alpha=.1)
+
+    stem_center_x=[stem_center.xyz[0] for stem_center in stem_centers]
+    stem_center_y=[stem_center.xyz[1] for stem_center in stem_centers]
     plt.scatter(x=stem_center_x, y=stem_center_y, color='red', marker='x')
-    plt.show()
+    plt.title(save_title)
+    if save_title:
+        plt.savefig(fname=f"saved_images/{save_title}")
     return
-
-
-def find_n_stems():
-    n=4
-    file_name="Test_data/treeID_35618_merged.las"
-    random.seed(42)
-
-    point_cloud=Point_Cloud(file_name)
-    stems=[]
-    for _ in range(n):
-        stem=point_cloud.find_stem()
-        if stem:
-            stems.append(stem)
-            point_cloud.disable_stem_region(stem)
-        else:
-            break
 
 
 
 if __name__=="__main__":
+    file_names=[
+        # "Test_data/treeID_12210.las", # 1 stem
+        # "Test_data/treeID_19707.las", # 1 stem
+        # "Test_data/treeID_33009.las", # 1 stem
+        # "Test_data/treeID_34926_merged.las", # >10 stems
+        # "Test_data/treeID_35618_merged.las", # >10 stems
+        "Test_data/treeID_40038_merged.las", # 2 stems
+        "Test_data/treeID_40061_merged.las", # 13 stems
+        "Test_data/treeID_40113_merged.las", # 3 stems
+        "Test_data/treeID_40645_merged.las", # 2 stems
+        "Test_data/treeID_40803_merged.las", # 4 stems
+        "Test_data/treeID_42113_merged.las", # 11 stems
+    ]
 
-    cProfile.run('find_n_stems()')
+    for file_name in file_names:
+        random.seed(42)
+        point_cloud=Point_Cloud(file_name)
 
-
-    # file_name="Test_data/treeID_12210.las"
-    # file_name="Test_data/treeID_19707.las"
-    # file_name="Test_data/treeID_33009.las"
-    # file_name="Test_data/treeID_34926_merged.las"
-    file_name="Test_data/treeID_35618_merged.las"
-    sample_fraction=.5
-    random.seed(42)
-
-    # stem_centers_file='stem_centers_output.txt'
-    # stem_centers=[]
-    # with open(stem_centers_file, 'r') as infile:
-    #     for line in infile.read().split("array"):
-    #         if line:
-    #             stem_centers.append(np.array([float(s) for s in line[2:-4].split(",  ")]))
-
-    point_cloud=Point_Cloud(file_name)
-    # plot_stem_centers(point_cloud, stem_centers)
-
-    # point_cloud.plot()
-    stems=[]
-    while True:
-        t_start=time.time()
-        stem=point_cloud.find_stem()
-        t_end=time.time()
-        if stem:
-            stems.append(stem)
-            print(f"I found the {len(stems)}th stem in {t_end-t_start} seconds!")
-            point_cloud.plot(stem=stem, disabled_color='green')
-            point_cloud.disable_stem_region(stem)
-            # plot_point_cloud(point_cloud, stem)
-        else:
-            print(f"I found that there were no more stems in {t_end-t_start} seconds!")
-            break
-    print(f"Done! Found {len(stems)} stems")
+        # point_cloud.plot()
+        overall_t_start=time.time()
+        stems=[]
+        while True:
+            t_start=time.time()
+            stem=point_cloud.find_stem()
+            t_end=time.time()
+            if stem:
+                stems.append(stem)
+                print(f"I found the {len(stems)}th stem in {t_end-t_start} seconds!")
+                point_cloud.plot(stem=stem, disabled_color='green', theta=0)
+                point_cloud.disable_stem_region(stem)
+                # plot_point_cloud(point_cloud, stem)
+            else:
+                print(f"I found that there were no more stems in {t_end-t_start} seconds!")
+                break
+        save_file_name=file_name.split(".")[0].split("/")[1]+"_stem_centers.png"
+        plot_stem_centers(point_cloud, stems=stems, include_ground=False, save_title=save_file_name)
+        overall_t_end=time.time()
+        print(f"Done! Found {len(stems)} stems in {overall_t_end-overall_t_start} seconds!")
     print("foo")
 
