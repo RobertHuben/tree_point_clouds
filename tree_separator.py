@@ -4,13 +4,13 @@ import math
 import numpy as np
 import random
 import time
-import cProfile
+import pandas as pd
 
 
 class Point_Cloud:
     # object that stores the points in a point cloud, initialized from a las file
     # points can be enabled or disabled, disabled points are ignored when searching for stems
-    def __init__(self, file_name):
+    def __init__(self, file_name, verbose=False):
         all_data = laspy.read(file_name)
         height_of_points_above_ground = np.array(
             [point[-1] for point in all_data.points.array])
@@ -18,6 +18,7 @@ class Point_Cloud:
             all_data.xyz, height_of_points_above_ground)]
         # internal variable, dont call it directly
         self.__enabled_points__ = self.points
+        self.verbose = verbose
 
     def enabled_points(self):
         # filters the set of points for just those enabled, then resturns that set of enabled points
@@ -55,12 +56,15 @@ class Point_Cloud:
                     self.disable_stem_region(
                         [active_point], fail_to_find_disable_radius)
                     n_points_end = len(self.enabled_points())
-                    print(f"We exploded {n_points_start-n_points_end} points!")
+                    if self.verbose:
+                        print(
+                            f"We exploded {n_points_start-n_points_end} points!")
                     while stem and not stem[-1].enabled:
                         stem.pop()
         if stem_grounded:
             # we've found a stem
-            print("Found a stem!")
+            if self.verbose:
+                print("Found a stem!")
             return stem
         else:
             # if the point cloud cannot find a new stem, we stop
@@ -75,7 +79,7 @@ class Point_Cloud:
 
     def plot(self, stem=None, disabled_color='green', theta=0):
         # displays the point cloud
-        # inputs: 
+        # inputs:
         #   - stem : a set of points to highlight as the stem
         #   - disabled_color : the color to draw the disabled points as. If None, will not draw them
         #   - theta : an angle (in degrees), which rotates the picture
@@ -97,6 +101,16 @@ class Point_Cloud:
                       stem_point.xyz[1]*sin for stem_point in stem]
             z_stem = [stem_point.xyz[2] for stem_point in stem]
             plt.scatter(x=x_stem, y=z_stem, color='red')
+
+    def save_via_dataframe(self, file_name="point_clustering_output.csv", folder_name="cluster_csvs/"):
+        pre_df = [list(point.xyz) + [point.height_above_ground,
+                                     point.cluster] for point in self.points]
+        df = pd.DataFrame(
+            pre_df, columns=["x", "y", "z", "height_above_ground", "cluster"])
+
+        out_file_name = f"{folder_name}{file_name}"
+        with open(out_file_name, 'w') as f:
+            df.to_csv(f)
 
 
 class Point:
@@ -176,10 +190,9 @@ def downsample(arr, fraction):
 
 def assign_clusters_by_nearest(point_cloud, stems, height_cutoff=0.2):
     # assigns every point in the point cloud to its closest stem (as measured by horizontal distance to stem midpoint)
-    # points below height_cutoff are sent to a separate cluster for the ground
+    # points below height_cutoff are sent to a separate cluster 0 for the ground
     stem_centers = [
         Point(sum([point.xyz for point in stem])/len(stem), 0) for stem in stems]
-    # point_to_stem_center_horizontal_distances=np.array([[squared_horizontal_distance(cloud_point, stem_center) for cloud_point in point_cloud.points] for stem_center in stem_centers])
     for point in point_cloud.points:
         if point.height_above_ground < height_cutoff:
             point.cluster = 0
@@ -192,8 +205,7 @@ def assign_clusters_by_nearest(point_cloud, stems, height_cutoff=0.2):
 
 def assign_clusters_by_growing(point_cloud, stems, grow_radius=.2, grow_height=.4, height_cutoff=0.2):
     # assigns points to clusters based on "growing" the stem
-
-    # the ground is cluster 0
+    # points below height_cutoff are sent to a separate cluster 0 for the ground
     for point in point_cloud.points:
         if point.height_above_ground < height_cutoff:
             point.cluster = 0
@@ -204,12 +216,15 @@ def assign_clusters_by_growing(point_cloud, stems, grow_radius=.2, grow_height=.
             point_to_grow = growing_points.pop()
             upwards_points = point_to_grow.find_points_in_cylinder(
                 unclustered_points, horizontal_radius=grow_radius, height_above_self=grow_height, height_below_self=0)
-            print(
-                f"Found {len(upwards_points)} new points for cluster {i+1}/{len(stems)}")
+            if point_cloud.verbose:
+                print(
+                    f"Found {len(upwards_points)} new points for cluster {i+1}/{len(stems)}")
             for upward_point in upwards_points:
                 upward_point.cluster = i+1
                 growing_points.append(upward_point)
-    # if any points are not assigned to a cluster, this finishes the process:
+        print(f"Finished first pass at assigning points to cluster {i+1}")
+    # if any points are not assigned to a cluster, this method finishes the process:
+    print("Proceeding to cluster remaining points!")
     cluster_remaining_points_to_nearest_neighbor(point_cloud)
 
 
@@ -224,9 +239,8 @@ def cluster_remaining_points_to_nearest_neighbor(point_cloud):
 
 
 def plot_stem_centers(point_cloud, stems, include_ground=True, save_title=None, show_unclustered=False):
+    # visualization method
     plt.close()
-    # assign_clusters_by_nearest(point_cloud,stems)
-    assign_clusters_by_growing(point_cloud, stems)
 
     stem_centers = [
         Point(sum([point.xyz for point in stem])/len(stem), 0) for stem in stems]
@@ -286,26 +300,29 @@ if __name__ == "__main__":
         # point_cloud.plot()
         overall_t_start = time.time()
         stems = []
-        while True:
+        stem = True
+        while stem:
             t_start = time.time()
             stem = point_cloud.find_stem()
             t_end = time.time()
             if stem:
                 stems.append(stem)
                 print(
-                    f"I found the {len(stems)}th stem in {t_end-t_start} seconds!")
-                point_cloud.plot(stem=stem, disabled_color='green', theta=0)
+                    f"I found the {len(stems)}th stem in {t_end-t_start:.2f} seconds!")
+                # point_cloud.plot(stem=stem, disabled_color='green', theta=0)
                 point_cloud.disable_stem_region(stem)
-                # plot_point_cloud(point_cloud, stem)
             else:
                 print(
-                    f"I found that there were no more stems in {t_end-t_start} seconds!")
-                break
+                    f"I found that there were no more stems in {t_end-t_start:.2f} seconds!")
+        # assign_clusters_by_nearest(point_cloud,stems)
+        assign_clusters_by_growing(point_cloud, stems)
+
+        point_cloud.save_via_dataframe()
         save_file_name = file_name.split(
             ".")[0].split("/")[1]+"_stem_centers.png"
-        plot_stem_centers(point_cloud, stems=stems,
-                          include_ground=False, save_title=save_file_name)
+        # plot_stem_centers(point_cloud, stems=stems,
+        #                   include_ground=False, save_title=save_file_name)
         overall_t_end = time.time()
         print(
-            f"Done! Found {len(stems)} stems in {overall_t_end-overall_t_start} seconds!")
+            f"Done! Found {len(stems)} stems in {overall_t_end-overall_t_start:.2f} seconds!")
     print("foo")
