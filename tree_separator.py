@@ -5,7 +5,8 @@ import numpy as np
 import random
 import time
 import pandas as pd
-
+import argparse
+import re
 
 class Point_Cloud:
     # object that stores the points in a point cloud, initialized from a las file
@@ -229,6 +230,7 @@ def assign_clusters_by_growing(point_cloud, stems, grow_radius=.2, grow_height=.
         if point.height_above_ground < height_cutoff:
             point.cluster = 0
     for i, stem in enumerate(stems):
+        t_start=time.time()
         growing_points = [stem_point for stem_point in stem]
         while growing_points:
             unclustered_points = filter_for_unclustered(point_cloud.points)
@@ -241,7 +243,8 @@ def assign_clusters_by_growing(point_cloud, stems, grow_radius=.2, grow_height=.
             for upward_point in upwards_points:
                 upward_point.cluster = i+1
                 growing_points.append(upward_point)
-        print(f"Finished first pass at assigning points to cluster {i+1}")
+        t_end=time.time()
+        print(f"Finished initial assignment of points to cluster {i+1}/{len(stems)} in {t_end-t_start:.2f} seconds!")
     # if any points are not assigned to a cluster, this method finishes the process:
     print("Proceeding to cluster remaining points!")
     cluster_remaining_points_to_nearest_neighbor(point_cloud)
@@ -297,24 +300,40 @@ def plot_stem_centers(point_cloud, stems, include_ground=True, save_title=None, 
 
 
 if __name__ == "__main__":
-    make_plots = False
-    file_names = [
-        # "Test_data/treeID_12210.las", # 1 stem
-        # "Test_data/treeID_19707.las", # 1 stem
-        # "Test_data/treeID_33009.las", # 1 stem
-        # "Test_data/treeID_34926_merged.las", # >10 stems
-        # "Test_data/treeID_35618_merged.las", # >10 stems
-        # "Test_data/treeID_40038_merged.las", # 2 stems
-        # "Test_data/treeID_40061_merged.las", # 13 stems
-        # "Test_data/treeID_40113_merged.las", # 3 stems
-        "Test_data/treeID_40645_merged.las",  # 2 stems
-        # "Test_data/treeID_40803_merged.las", # 9ish stems
-        # "Test_data/treeID_42113_merged.las", # 11 stems
-    ]
+    parser = argparse.ArgumentParser(description='Clusters points into trees a .las file')
+    parser.add_argument('file_name', type=str, default=None,
+                        help='the name of the file')
+    args = parser.parse_args()
 
+    if args.file_name:
+        if re.match("\d+", args.file_name):
+            file_names=[f"Test_data/treeID_{args.file_name}_merged.las"]
+        else:
+            file_names=[args.file_name]
+    else:
+        file_names = [
+            # "Test_data/treeID_12210.las", # 1 stem
+            # "Test_data/treeID_19707.las", # 1 stem
+            # "Test_data/treeID_33009.las", # 1 stem
+            # "Test_data/treeID_34926_merged.las", # >10 stems
+            # "Test_data/treeID_35618_merged.las", # >10 stems
+            # "Test_data/treeID_40038_merged.las", # 2 stems
+            # "Test_data/treeID_40061_merged.las", # 13 stems
+            # "Test_data/treeID_40113_merged.las", # 3 stems
+            "Test_data/treeID_40645_merged.las",  # 2 stems
+            # "Test_data/treeID_40803_merged.las", # 9ish stems
+            # "Test_data/treeID_42113_merged.las", # 11 stems
+        ]
+
+    make_plots = False
     for file_name in file_names:
         random.seed(42)
-        point_cloud = Point_Cloud(file_name)
+        try:
+            point_cloud = Point_Cloud(file_name)
+            print(f"Loaded file {file_name}, attempting to cluster {len(point_cloud.points)} points.")
+        except:
+            print(f"I could not find the file named {file_name}, please try again with a new file.")
+            break
 
         overall_t_start = time.time()
         stems = []
@@ -326,7 +345,7 @@ if __name__ == "__main__":
             if stem:
                 stems.append(stem)
                 print(
-                    f"I found the {len(stems)}th stem in {t_end-t_start:.2f} seconds!")
+                    f"I found stem #{len(stems)} in {t_end-t_start:.2f} seconds!")
                 # point_cloud.plot(stem=stem, disabled_color='green', theta=0)
                 point_cloud.disable_stem_region(stem)
             else:
@@ -345,4 +364,4 @@ if __name__ == "__main__":
                               include_ground=False, save_title=plot_file_name)
         overall_t_end = time.time()
         print(
-            f"Done! Found {len(stems)} stems in {overall_t_end-overall_t_start:.2f} seconds!")
+            f"Done! Assigned {len(point_cloud.points)} points to {len(stems)} stems in {overall_t_end-overall_t_start:.2f} seconds!")
