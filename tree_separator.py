@@ -301,7 +301,7 @@ def plot_stem_centers(point_cloud, stems, include_ground=True, save_title=None, 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Clusters points into trees a .las file')
-    parser.add_argument('file_name', type=str, default=None,
+    parser.add_argument('-f', '--file_name', required=False, type=str, default="",
                         help='the name of the file')
     args = parser.parse_args()
 
