@@ -102,7 +102,8 @@ class Point_Cloud:
             z_stem = [stem_point.xyz[2] for stem_point in stem]
             plt.scatter(x=x_stem, y=z_stem, color='red')
 
-    def save_via_dataframe(self, file_name="point_clustering_output.csv", folder_name="cluster_csvs/"):
+    def save_via_dataframe(self, file_name="point_clusters.csv", folder_name="cluster_csvs/", stems=None):
+        # saves the points with their cluster information
         pre_df = [list(point.xyz) + [point.height_above_ground,
                                      point.cluster] for point in self.points]
         df = pd.DataFrame(
@@ -111,6 +112,21 @@ class Point_Cloud:
         out_file_name = f"{folder_name}{file_name}"
         with open(out_file_name, 'w') as f:
             df.to_csv(f)
+
+        if stems:
+            stem_centers=compute_stem_centers(stems)
+            center_point=np.average(np.array([point.xyz for point in self.points]), axis=0)
+            stem_centers=[Point(center_point, -1)]+stem_centers
+            pre_df_stems = [list(point.xyz) + [point.height_above_ground,
+                                        point.cluster] for point in stem_centers]
+            df_stems = pd.DataFrame(
+                pre_df_stems, columns=["x", "y", "z", "height_above_ground", "cluster"])
+            df_stems["cluster"]=[n for n in range(len(stem_centers))]
+            df_stems["cluster_name"]= ["Ground"]+ [f"Tree {n+1}" for n in range(len(stem_centers)-1)]
+            stem_out_file_name = f"{folder_name}{file_name}".split("clusters")[0]+"stem_centers.csv"
+            with open(stem_out_file_name, 'w') as f_stems:
+                df_stems.to_csv(f_stems)
+
 
 
 class Point:
@@ -187,12 +203,15 @@ def downsample(arr, fraction):
     cutoff_point = int(arr.shape[0]*fraction)
     return arr[:cutoff_point]
 
+def compute_stem_centers(stems):
+    stem_centers = [
+        Point(sum([point.xyz for point in stem])/len(stem), max([point.height_above_ground for point in stem])) for stem in stems]
+    return stem_centers
 
 def assign_clusters_by_nearest(point_cloud, stems, height_cutoff=0.2):
     # assigns every point in the point cloud to its closest stem (as measured by horizontal distance to stem midpoint)
     # points below height_cutoff are sent to a separate cluster 0 for the ground
-    stem_centers = [
-        Point(sum([point.xyz for point in stem])/len(stem), 0) for stem in stems]
+    stem_centers = compute_stem_centers(stems)
     for point in point_cloud.points:
         if point.height_above_ground < height_cutoff:
             point.cluster = 0
@@ -242,8 +261,7 @@ def plot_stem_centers(point_cloud, stems, include_ground=True, save_title=None, 
     # visualization method
     plt.close()
 
-    stem_centers = [
-        Point(sum([point.xyz for point in stem])/len(stem), 0) for stem in stems]
+    stem_centers = compute_stem_centers(stems)
 
     colors = ['blue', 'green', 'purple', 'yellow',
               'black', 'orange', 'cyan', 'maroon', 'brown']
@@ -279,6 +297,7 @@ def plot_stem_centers(point_cloud, stems, include_ground=True, save_title=None, 
 
 
 if __name__ == "__main__":
+    make_plots = False
     file_names = [
         # "Test_data/treeID_12210.las", # 1 stem
         # "Test_data/treeID_19707.las", # 1 stem
@@ -297,7 +316,6 @@ if __name__ == "__main__":
         random.seed(42)
         point_cloud = Point_Cloud(file_name)
 
-        # point_cloud.plot()
         overall_t_start = time.time()
         stems = []
         stem = True
@@ -317,12 +335,14 @@ if __name__ == "__main__":
         # assign_clusters_by_nearest(point_cloud,stems)
         assign_clusters_by_growing(point_cloud, stems)
 
-        point_cloud.save_via_dataframe()
-        save_file_name = file_name.split(
-            ".")[0].split("/")[1]+"_stem_centers.png"
-        # plot_stem_centers(point_cloud, stems=stems,
-        #                   include_ground=False, save_title=save_file_name)
+        csv_file_name = file_name.split(
+            ".")[0].split("/")[1]+"_clusters.csv"
+        point_cloud.save_via_dataframe(file_name=csv_file_name, stems=stems)
+        if make_plots:
+            plot_file_name = file_name.split(
+                ".")[0].split("/")[1]+"_cluster_plot.png"
+            plot_stem_centers(point_cloud, stems=stems,
+                              include_ground=False, save_title=plot_file_name)
         overall_t_end = time.time()
         print(
             f"Done! Found {len(stems)} stems in {overall_t_end-overall_t_start:.2f} seconds!")
-    print("foo")
