@@ -303,6 +303,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Clusters points into trees a .las file')
     parser.add_argument('-f', '--file_name', required=False, type=str, default="",
                         help='the name of the file')
+    parser.add_argument('-p', '--make_plots', action='store_const', required=False, const=True,
+                        help='whether to save plots')
     args = parser.parse_args()
 
     if args.file_name:
@@ -325,7 +327,6 @@ if __name__ == "__main__":
             # "Test_data/treeID_42113_merged.las", # 11 stems
         ]
 
-    make_plots = False
     for file_name in file_names:
         random.seed(42)
         try:
@@ -357,7 +358,7 @@ if __name__ == "__main__":
         csv_file_name = file_name.split(
             ".")[0].split("/")[1]+"_clusters.csv"
         point_cloud.save_via_dataframe(file_name=csv_file_name, stems=stems)
-        if make_plots:
+        if args.make_plots:
             plot_file_name = file_name.split(
                 ".")[0].split("/")[1]+"_cluster_plot.png"
             plot_stem_centers(point_cloud, stems=stems,
