@@ -78,7 +78,7 @@ class Point_Cloud:
             if any([squared_distance(enabled_point, stem_point) < squared_radius_to_delete for stem_point in stem]):
                 enabled_point.enabled = False
 
-    def plot(self, stem=None, disabled_color='green', theta=0):
+    def plot(self, stem=None, disabled_color='green', theta=0, save_location=None):
         # displays the point cloud
         # inputs:
         #   - stem : a set of points to highlight as the stem
@@ -102,6 +102,8 @@ class Point_Cloud:
                       stem_point.xyz[1]*sin for stem_point in stem]
             z_stem = [stem_point.xyz[2] for stem_point in stem]
             plt.scatter(x=x_stem, y=z_stem, color='red')
+        if save_location:
+            plt.savefig(fname=f"saved_images/side_views/{save_location}")
 
     def save_via_dataframe(self, file_name="point_clusters.csv", folder_name="cluster_csvs/", stems=None):
         # saves the points with their cluster information
@@ -305,6 +307,8 @@ if __name__ == "__main__":
                         help='the name of the file')
     parser.add_argument('-p', '--make_plots', action='store_const', required=False, const=True,
                         help='whether to save plots')
+    parser.add_argument('-sv', '--side_view', required=False, type=int, default=0,
+                        help='whether to save a plot with a side view, and at what angle to view it')
     args = parser.parse_args()
 
     if args.file_name:
@@ -314,6 +318,7 @@ if __name__ == "__main__":
             file_names=[args.file_name]
     else:
         file_names = [
+            # "Test_data/treeID_10717_merged.las", # 1 stem
             # "Test_data/treeID_12210.las", # 1 stem
             # "Test_data/treeID_19707.las", # 1 stem
             # "Test_data/treeID_33009.las", # 1 stem
@@ -363,6 +368,11 @@ if __name__ == "__main__":
                 ".")[0].split("/")[1]+"_cluster_plot.png"
             plot_stem_centers(point_cloud, stems=stems,
                               include_ground=False, save_title=plot_file_name)
+        if args.side_view:
+            plot_file_name = file_name.split(
+                ".")[0].split("/")[1]+f"_side_view_angle_{args.side_view}.png"
+            point_cloud.plot(theta=args.side_view, save_location=plot_file_name)
+
         overall_t_end = time.time()
         print(
             f"Done! Assigned {len(point_cloud.points)} points to {len(stems)} stems in {overall_t_end-overall_t_start:.2f} seconds!")
