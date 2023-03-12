@@ -30,7 +30,7 @@ class Point_Cloud:
         # returns the point in the point cloud which has the greatest z coordinate
         return max(self.enabled_points(), key=lambda point: point.z())
 
-    def find_stem(self, min_height=.5, fail_to_find_disable_radius=.2):
+    def find_stem(self, min_height=.5, fail_to_find_disable_radius=.2, descendents_height=.3):
         # returns a stem from the point cloud if it exists, otherwise returns None
         # the stem will be a list of points in descending z value, starting from the min height and going down to a ground point
         stem_grounded = False
@@ -44,7 +44,7 @@ class Point_Cloud:
                 # we try to find a point in a cylinder below this stem
                 active_point = stem[-1]
                 descendents = active_point.find_descendents(
-                    self.enabled_points())
+                    self.enabled_points(), height_below_self=descendents_height)
                 if descendents:
                     # if there is a valid descendent, take one at random (we can try again later if it doesnt work)
                     next_point = random.choice(descendents)
@@ -96,7 +96,7 @@ class Point_Cloud:
             x = [point.xyz[0]*cos+point.xyz[1] *
                  sin for point in disabled_point_cloud]
             z = [point.xyz[2] for point in disabled_point_cloud]
-            plt.scatter(x=x, y=z, color='green')
+            plt.scatter(x=x, y=z, color=disabled_color)
         if stem:
             x_stem = [stem_point.xyz[0]*cos +
                       stem_point.xyz[1]*sin for stem_point in stem]
@@ -309,6 +309,8 @@ if __name__ == "__main__":
                         help='whether to save plots')
     parser.add_argument('-sv', '--side_view', required=False, type=int, default=0,
                         help='whether to save a plot with a side view, and at what angle to view it')
+    parser.add_argument('-dh', '--descendents_height', required=False, type=float, default=.3,
+                        help='how far to search vertically for descendents')
     args = parser.parse_args()
 
     if args.file_name:
@@ -346,7 +348,7 @@ if __name__ == "__main__":
         stem = True
         while stem:
             t_start = time.time()
-            stem = point_cloud.find_stem()
+            stem = point_cloud.find_stem(descendents_height=args.descendents_height)
             t_end = time.time()
             if stem:
                 stems.append(stem)
@@ -371,7 +373,7 @@ if __name__ == "__main__":
         if args.side_view:
             plot_file_name = file_name.split(
                 ".")[0].split("/")[1]+f"_side_view_angle_{args.side_view}.png"
-            point_cloud.plot(theta=args.side_view, save_location=plot_file_name)
+            point_cloud.plot(theta=args.side_view, disabled_color="blue", save_location=plot_file_name)
 
         overall_t_end = time.time()
         print(
