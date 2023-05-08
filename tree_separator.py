@@ -168,11 +168,11 @@ class Point:
     def __repr__(self):
         return str(list(self.xyz)+[self.height_above_ground, self.enabled])
 
-    def find_descendents(self, points_to_check, horizontal_radius=.2, height_above_self=0, height_below_self=0.3):
+    def find_descendents(self, points_to_initialize_descendents, horizontal_radius=.2, height_above_self=0, height_below_self=0.3):
         # finds enabled points in a cylinder below self
         if not self.descendents:
             self.descendents = self.find_points_in_cylinder(
-                points_to_check, horizontal_radius=horizontal_radius, height_above_self=height_above_self, height_below_self=height_below_self)
+                points_to_initialize_descendents, horizontal_radius=horizontal_radius, height_above_self=height_above_self, height_below_self=height_below_self)
         self.descendents = filter_for_enabled(self.descendents)
         return self.descendents
 
@@ -274,11 +274,12 @@ def assign_clusters_by_growing(point_cloud, stems, grow_radius=.2, grow_height=.
     # for each point in the cluster, we add the unclustered points in a cylinder above it to the same cluster, 
     # repeating until this adds no more new points to the cluster
     for i, stem in enumerate(stems):
-        cluster_number=i+1
         t_start = time.time()
+        cluster_number=i+1
         growing_points = [stem_point for stem_point in stem]
         while growing_points:
             unclustered_points = filter_for_unclustered(point_cloud.points)
+            # we grow points one at a time
             point_to_grow = growing_points.pop()
             upwards_points = point_to_grow.find_points_in_cylinder(
                 unclustered_points, horizontal_radius=grow_radius, height_above_self=grow_height, height_below_self=0)
