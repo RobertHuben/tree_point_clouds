@@ -33,6 +33,10 @@ class Point_Cloud:
     def find_stem(self, min_height=.5, fail_to_find_disable_radius=.2, descendents_height=.3):
         # returns a stem from the point cloud if it exists, otherwise returns None
         # the stem will be a list of points in descending z value, starting from above the min height and going down to a ground point
+        # inputs:
+        #   - min_height : the minimum height (in m) for a valid stem
+        #   - fail_to_find_disable_radius : when a point has no descendents, we disable each point within this radius of it
+        #   - descendents_height : the maximum vertical distance allowed to a descendent of this point
         stem_grounded = False
         while not(stem_grounded):
             # the stem starts at the highest point in the cloud
@@ -92,32 +96,42 @@ class Point_Cloud:
         z = [point.xyz[2] for point in enabled_point_cloud]
         plt.scatter(x=x, y=z, color='blue')
         if disabled_color:
+            # plot disabled points in a separate color
             disabled_point_cloud = filter_for_disabled(self.points)
             x = [point.xyz[0]*cos+point.xyz[1] *
                  sin for point in disabled_point_cloud]
             z = [point.xyz[2] for point in disabled_point_cloud]
             plt.scatter(x=x, y=z, color=disabled_color)
         if stem:
+            # plot the stem in red
             x_stem = [stem_point.xyz[0]*cos +
                       stem_point.xyz[1]*sin for stem_point in stem]
             z_stem = [stem_point.xyz[2] for stem_point in stem]
             plt.scatter(x=x_stem, y=z_stem, color='red')
         if save_location:
+            # save the figure
             plt.savefig(fname=f"saved_images/side_views/{save_location}")
 
     def save_via_dataframe(self, file_name="point_clusters.csv", folder_name="cluster_csvs", stems=None):
-        # saves the points with their cluster information
+        # saves this point cloud as a csv with their cluster information
+        # inputs:
+        #   file_name : the file that we save the data to (this will overwrite an old file if it is there)
+        #   folder_name : the folder to save the data to
+        #   stems : optional, a list of list of points, where we'll save the average position of each list into a separate file
         pre_df = [list(point.xyz) + [point.height_above_ground,
                                      point.cluster] for point in self.points]
+        # df has one row per point in the pointcloud, with these columns:
         df = pd.DataFrame(
             pre_df, columns=["x", "y", "z", "height_above_ground", "cluster"])
 
+        # save the df
         if not os.path.exists(folder_name):
             os.makedirs(folder_name)
         out_file_name = f"{folder_name}/{file_name}"
         with open(out_file_name, 'w') as f:
             df.to_csv(f)
 
+        # if we also want to save stem information, we do that here
         if stems:
             stem_centers = compute_stem_centers(stems)
             center_point = np.average(
@@ -139,13 +153,17 @@ class Point_Cloud:
 class Point:
     # a point in the point cloud
 
-    def __init__(self, xyz, height_above_ground, ):
+    def __init__(self, xyz, height_above_ground):
+        # inputs:
+        #   xyz - a 3-item list of x, y, and z coordinates
+        #   height_above_ground - the point's height above ground
         self.xyz = xyz
         self.height_above_ground = height_above_ground
         self.is_ground = height_above_ground < 0
         self.enabled = True
         self.descendents = None
         self.cluster = -1
+        # -1 is the code for not-yet-clustered points
 
     def __repr__(self):
         return str(list(self.xyz)+[self.height_above_ground, self.enabled])
@@ -160,10 +178,13 @@ class Point:
 
     def find_points_in_cylinder(self, points_to_check, horizontal_radius=.2, height_above_self=0, height_below_self=0.3):
         # finds points in a cylinder around self
+        # screen for points not too far below
         points_to_check = filter(
             lambda point: -1*height_below_self < point.z()-self.z(), points_to_check)
+        # screen for points not too far above
         points_to_check = list(
             filter(lambda point: height_above_self > point.z()-self.z(), points_to_check))
+        # screen for points within the correct horizontal distance
         squared_distances = np.zeros(len(points_to_check))
         for dim in range(2):
             distance_on_this_dimension = self.xyz[dim]-np.array(
@@ -174,50 +195,62 @@ class Point:
         return points_in_cylinder
 
     def z(self):
+        # returns the z coordinate of the point
         return self.xyz[2]
 
 
 def filter_for_enabled(points_list):
+    #filters a list for just the points which are enabled
     return [point for point in points_list if point.enabled]
 
 
 def filter_for_disabled(points_list):
+    #filters a list for just the points which are NOT enabled
     return [point for point in points_list if not point.enabled]
 
 
 def filter_for_clustered(points_list):
+    #filters a list for just the points which are in a cluster
     return [point for point in points_list if point.cluster >= 0]
 
 
 def filter_for_clustered_non_ground(points_list):
+    #filters a list for just the points which are in a non-ground cluster
     return [point for point in points_list if point.cluster > 0]
 
 
 def filter_for_unclustered(points_list):
+    #filters a list for just the points which are NOT in a cluster
     return [point for point in points_list if point.cluster < 0]
 
 
 def squared_horizontal_distance(point1, point2):
+    # computes the squared horizontal distance between the two points
     return (point1.xyz[0]-point2.xyz[0])**2+(point1.xyz[1]-point2.xyz[1])**2
 
 
 def squared_distance(point1, point2):
+    # computes the squared distance between the two points
     return (point1.xyz[0]-point2.xyz[0])**2+(point1.xyz[1]-point2.xyz[1])**2+(point1.xyz[2]-point2.xyz[2])**2
 
 
 def downsample(arr, fraction):
+    # selects a random subset of fraction elements in arr
+    # not used, but could be used if you need to speed up the algorithms
     np.random.shuffle(arr)
     cutoff_point = int(arr.shape[0]*fraction)
     return arr[:cutoff_point]
 
 
 def compute_stem_centers(stems):
+    # creates a list of points, one point as the "stem center" of each stem in stems
     stem_centers = [
         Point(sum([point.xyz for point in stem])/len(stem), max([point.height_above_ground for point in stem])) for stem in stems]
     return stem_centers
 
 
 def assign_clusters_by_nearest(point_cloud, stems, height_cutoff=0.2):
+    # this method is old, and not recommended, assign_clusters_by_growing() is preferred
     # assigns every point in the point cloud to its closest stem (as measured by horizontal distance to stem midpoint)
     # points below height_cutoff are sent to a separate cluster 0 for the ground
     stem_centers = compute_stem_centers(stems)
@@ -237,6 +270,9 @@ def assign_clusters_by_growing(point_cloud, stems, grow_radius=.2, grow_height=.
     for point in point_cloud.points:
         if point.height_above_ground < height_cutoff:
             point.cluster = 0
+    # now we "grow" each stem to form the core of our clusters
+    # for each point in the cluster, we add the unclustered points in a cylinder above it to the same cluster, 
+    # repeating until this adds no more new points to the cluster
     for i, stem in enumerate(stems):
         t_start = time.time()
         growing_points = [stem_point for stem_point in stem]
