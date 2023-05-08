@@ -279,8 +279,8 @@ def assign_clusters_by_growing(point_cloud, stems, grow_radius=.2, grow_height=.
         growing_points = [stem_point for stem_point in stem]
         while growing_points:
             unclustered_points = filter_for_unclustered(point_cloud.points)
-            # we grow points one at a time
             point_to_grow = growing_points.pop()
+            # we grow points one at a time
             upwards_points = point_to_grow.find_points_in_cylinder(
                 unclustered_points, horizontal_radius=grow_radius, height_above_self=grow_height, height_below_self=0)
             if point_cloud.verbose:
