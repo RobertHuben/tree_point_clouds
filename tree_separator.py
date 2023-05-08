@@ -7,7 +7,7 @@ import time
 import pandas as pd
 import argparse
 import re
-
+import os
 
 class Point_Cloud:
     # object that stores the points in a point cloud, initialized from a las file
@@ -105,14 +105,16 @@ class Point_Cloud:
         if save_location:
             plt.savefig(fname=f"saved_images/side_views/{save_location}")
 
-    def save_via_dataframe(self, file_name="point_clusters.csv", folder_name="cluster_csvs/", stems=None):
+    def save_via_dataframe(self, file_name="point_clusters.csv", folder_name="cluster_csvs", stems=None):
         # saves the points with their cluster information
         pre_df = [list(point.xyz) + [point.height_above_ground,
                                      point.cluster] for point in self.points]
         df = pd.DataFrame(
             pre_df, columns=["x", "y", "z", "height_above_ground", "cluster"])
 
-        out_file_name = f"{folder_name}{file_name}"
+        if not os.path.exists(folder_name):
+            os.makedirs(folder_name)
+        out_file_name = f"{folder_name}/{file_name}"
         with open(out_file_name, 'w') as f:
             df.to_csv(f)
 
@@ -317,6 +319,8 @@ def initialize_arguments():
                         help='whether to save a plot with a side view, and at what angle to view it')
     parser.add_argument('-dh', '--descendents_height', required=False, type=float, default=.3,
                         help='how far to search vertically for descendents')
+    parser.add_argument('-of', '--output_folder', required=False, type=str, default="cluster_csvs",
+                        help='the name of the folder to save the outputs to')
     args = parser.parse_args()
 
     if args.file_name:
@@ -379,7 +383,7 @@ if __name__ == "__main__":
 
         file_name_prefix = file_name.split(".")[0].split("/")[1]
         csv_file_name = f"{file_name_prefix}_clusters.csv"
-        point_cloud.save_via_dataframe(file_name=csv_file_name, stems=stems)
+        point_cloud.save_via_dataframe(file_name=csv_file_name, stems=stems, folder_name=args.output_folder)
         if args.make_plots:
             plot_file_name = f"{file_name_prefix}_cluster_plot.png"
             plot_stem_centers(point_cloud, stems=stems,
