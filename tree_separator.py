@@ -274,6 +274,7 @@ def assign_clusters_by_growing(point_cloud, stems, grow_radius=.2, grow_height=.
     # for each point in the cluster, we add the unclustered points in a cylinder above it to the same cluster, 
     # repeating until this adds no more new points to the cluster
     for i, stem in enumerate(stems):
+        cluster_number=i+1
         t_start = time.time()
         growing_points = [stem_point for stem_point in stem]
         while growing_points:
@@ -283,13 +284,13 @@ def assign_clusters_by_growing(point_cloud, stems, grow_radius=.2, grow_height=.
                 unclustered_points, horizontal_radius=grow_radius, height_above_self=grow_height, height_below_self=0)
             if point_cloud.verbose:
                 print(
-                    f"Found {len(upwards_points)} new points for cluster {i+1}/{len(stems)}")
+                    f"Found {len(upwards_points)} new points for cluster {cluster_number}/{len(stems)}")
             for upward_point in upwards_points:
-                upward_point.cluster = i+1
+                upward_point.cluster = cluster_number
                 growing_points.append(upward_point)
         t_end = time.time()
         print(
-            f"Finished initial assignment of points to cluster {i+1}/{len(stems)} in {t_end-t_start:.2f} seconds!")
+            f"Finished initial assignment of points to cluster {cluster_number}/{len(stems)} in {t_end-t_start:.2f} seconds!")
     # if any points are not assigned to a cluster, this method finishes the process:
     print("Proceeding to cluster remaining points!")
     cluster_remaining_points_to_nearest_neighbor(point_cloud)
