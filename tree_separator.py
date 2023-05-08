@@ -8,6 +8,7 @@ import pandas as pd
 import argparse
 import re
 
+
 class Point_Cloud:
     # object that stores the points in a point cloud, initialized from a las file
     # points can be enabled or disabled, disabled points are ignored when searching for stems
@@ -17,22 +18,21 @@ class Point_Cloud:
             [point[-1] for point in all_data.points.array])
         self.points = [Point(xyz, height) for xyz, height in zip(
             all_data.xyz, height_of_points_above_ground)]
-        # internal variable, dont call it directly
-        self.__enabled_points__ = self.points
+        self.__enabled_points__ = self.points # internal, to access this use enabled_points()
         self.verbose = verbose
 
     def enabled_points(self):
-        # filters the set of points for just those enabled, then resturns that set of enabled points
+        # filters the set of points for just those enabled, then returns that set of enabled points
         self.__enabled_points__ = filter_for_enabled(self.__enabled_points__)
         return self.__enabled_points__
 
     def find_highest_point(self):
-        # returns the point in the point cloud which has the greatest z coordinate
+        # returns the highest point in the point cloud, ie the one with the greatest z coordinate
         return max(self.enabled_points(), key=lambda point: point.z())
 
     def find_stem(self, min_height=.5, fail_to_find_disable_radius=.2, descendents_height=.3):
         # returns a stem from the point cloud if it exists, otherwise returns None
-        # the stem will be a list of points in descending z value, starting from the min height and going down to a ground point
+        # the stem will be a list of points in descending z value, starting from above the min height and going down to a ground point
         stem_grounded = False
         while not(stem_grounded):
             # the stem starts at the highest point in the cloud
@@ -59,7 +59,7 @@ class Point_Cloud:
                     n_points_end = len(self.enabled_points())
                     if self.verbose:
                         print(
-                            f"We exploded {n_points_start-n_points_end} points!")
+                            f"We disabled {n_points_start-n_points_end} points near this inactive point!")
                     while stem and not stem[-1].enabled:
                         stem.pop()
         if stem_grounded:
@@ -83,7 +83,7 @@ class Point_Cloud:
         # inputs:
         #   - stem : a set of points to highlight as the stem
         #   - disabled_color : the color to draw the disabled points as. If None, will not draw them
-        #   - theta : an angle (in degrees), which rotates the picture
+        #   - theta: an angle (in degrees), which rotates the picture
         plt.close()
         enabled_point_cloud = self.enabled_points()
         sin = math.sin(theta*180/math.pi)
@@ -117,19 +117,21 @@ class Point_Cloud:
             df.to_csv(f)
 
         if stems:
-            stem_centers=compute_stem_centers(stems)
-            center_point=np.average(np.array([point.xyz for point in self.points]), axis=0)
-            stem_centers=[Point(center_point, -1)]+stem_centers
+            stem_centers = compute_stem_centers(stems)
+            center_point = np.average(
+                np.array([point.xyz for point in self.points]), axis=0)
+            stem_centers = [Point(center_point, -1)]+stem_centers
             pre_df_stems = [list(point.xyz) + [point.height_above_ground,
-                                        point.cluster] for point in stem_centers]
+                                               point.cluster] for point in stem_centers]
             df_stems = pd.DataFrame(
                 pre_df_stems, columns=["x", "y", "z", "height_above_ground", "cluster"])
-            df_stems["cluster"]=[n for n in range(len(stem_centers))]
-            df_stems["cluster_name"]= ["Ground"]+ [f"Tree {n+1}" for n in range(len(stem_centers)-1)]
-            stem_out_file_name = f"{folder_name}{file_name}".split("clusters")[0]+"stem_centers.csv"
+            df_stems["cluster"] = [n for n in range(len(stem_centers))]
+            df_stems["cluster_name"] = ["Ground"] + \
+                [f"Tree {n+1}" for n in range(len(stem_centers)-1)]
+            stem_out_file_name = f"{folder_name}{file_name}".split("clusters")[
+                0]+"stem_centers.csv"
             with open(stem_out_file_name, 'w') as f_stems:
                 df_stems.to_csv(f_stems)
-
 
 
 class Point:
@@ -206,10 +208,12 @@ def downsample(arr, fraction):
     cutoff_point = int(arr.shape[0]*fraction)
     return arr[:cutoff_point]
 
+
 def compute_stem_centers(stems):
     stem_centers = [
         Point(sum([point.xyz for point in stem])/len(stem), max([point.height_above_ground for point in stem])) for stem in stems]
     return stem_centers
+
 
 def assign_clusters_by_nearest(point_cloud, stems, height_cutoff=0.2):
     # assigns every point in the point cloud to its closest stem (as measured by horizontal distance to stem midpoint)
@@ -232,7 +236,7 @@ def assign_clusters_by_growing(point_cloud, stems, grow_radius=.2, grow_height=.
         if point.height_above_ground < height_cutoff:
             point.cluster = 0
     for i, stem in enumerate(stems):
-        t_start=time.time()
+        t_start = time.time()
         growing_points = [stem_point for stem_point in stem]
         while growing_points:
             unclustered_points = filter_for_unclustered(point_cloud.points)
@@ -245,8 +249,9 @@ def assign_clusters_by_growing(point_cloud, stems, grow_radius=.2, grow_height=.
             for upward_point in upwards_points:
                 upward_point.cluster = i+1
                 growing_points.append(upward_point)
-        t_end=time.time()
-        print(f"Finished initial assignment of points to cluster {i+1}/{len(stems)} in {t_end-t_start:.2f} seconds!")
+        t_end = time.time()
+        print(
+            f"Finished initial assignment of points to cluster {i+1}/{len(stems)} in {t_end-t_start:.2f} seconds!")
     # if any points are not assigned to a cluster, this method finishes the process:
     print("Proceeding to cluster remaining points!")
     cluster_remaining_points_to_nearest_neighbor(point_cloud)
@@ -301,10 +306,11 @@ def plot_stem_centers(point_cloud, stems, include_ground=True, save_title=None, 
     return
 
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Clusters points into trees a .las file')
+def initialize_arguments():
+    parser = argparse.ArgumentParser(
+        description='Clusters points into trees a .las file')
     parser.add_argument('-f', '--file_name', required=False, type=str, default="",
-                        help='the name of the file')
+                        help='the name of the input file')
     parser.add_argument('-p', '--make_plots', action='store_const', required=False, const=True,
                         help='whether to save plots')
     parser.add_argument('-sv', '--side_view', required=False, type=int, default=0,
@@ -315,9 +321,9 @@ if __name__ == "__main__":
 
     if args.file_name:
         if re.match("\d+", args.file_name):
-            file_names=[f"Test_data/treeID_{args.file_name}_merged.las"]
+            file_names = [f"Test_data/treeID_{args.file_name}_merged.las"]
         else:
-            file_names=[args.file_name]
+            file_names = [args.file_name]
     else:
         file_names = [
             # "Test_data/treeID_10717_merged.las", # 1 stem
@@ -333,14 +339,22 @@ if __name__ == "__main__":
             # "Test_data/treeID_40803_merged.las", # 9ish stems
             # "Test_data/treeID_42113_merged.las", # 11 stems
         ]
+    return args, file_names
+
+
+if __name__ == "__main__":
+
+    args, file_names = initialize_arguments()
 
     for file_name in file_names:
         random.seed(42)
         try:
             point_cloud = Point_Cloud(file_name)
-            print(f"Loaded file {file_name}, attempting to cluster {len(point_cloud.points)} points.")
+            print(
+                f"Loaded file {file_name}, attempting to cluster {len(point_cloud.points)} points.")
         except:
-            print(f"I could not find the file named {file_name}, please try again with a new file.")
+            print(
+                f"I could not find the file named {file_name}, please try again with a new file.")
             break
 
         overall_t_start = time.time()
@@ -348,7 +362,8 @@ if __name__ == "__main__":
         stem = True
         while stem:
             t_start = time.time()
-            stem = point_cloud.find_stem(descendents_height=args.descendents_height)
+            stem = point_cloud.find_stem(
+                descendents_height=args.descendents_height)
             t_end = time.time()
             if stem:
                 stems.append(stem)
@@ -362,18 +377,17 @@ if __name__ == "__main__":
         # assign_clusters_by_nearest(point_cloud,stems)
         assign_clusters_by_growing(point_cloud, stems)
 
-        csv_file_name = file_name.split(
-            ".")[0].split("/")[1]+"_clusters.csv"
+        file_name_prefix = file_name.split(".")[0].split("/")[1]
+        csv_file_name = f"{file_name_prefix}_clusters.csv"
         point_cloud.save_via_dataframe(file_name=csv_file_name, stems=stems)
         if args.make_plots:
-            plot_file_name = file_name.split(
-                ".")[0].split("/")[1]+"_cluster_plot.png"
+            plot_file_name = f"{file_name_prefix}_cluster_plot.png"
             plot_stem_centers(point_cloud, stems=stems,
                               include_ground=False, save_title=plot_file_name)
         if args.side_view:
-            plot_file_name = file_name.split(
-                ".")[0].split("/")[1]+f"_side_view_angle_{args.side_view}.png"
-            point_cloud.plot(theta=args.side_view, disabled_color="blue", save_location=plot_file_name)
+            plot_file_name = f"{file_name_prefix}_side_view_angle_{args.side_view}.png"
+            point_cloud.plot(theta=args.side_view,
+                             disabled_color="blue", save_location=plot_file_name)
 
         overall_t_end = time.time()
         print(
