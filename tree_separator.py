@@ -130,7 +130,7 @@ class Point_Cloud:
             df_stems["cluster"] = [n for n in range(len(stem_centers))]
             df_stems["cluster_name"] = ["Ground"] + \
                 [f"Tree {n+1}" for n in range(len(stem_centers)-1)]
-            stem_out_file_name = f"{folder_name}{file_name}".split("clusters")[
+            stem_out_file_name = out_file_name.split("clusters.csv")[
                 0]+"stem_centers.csv"
             with open(stem_out_file_name, 'w') as f_stems:
                 df_stems.to_csv(f_stems)
@@ -394,5 +394,8 @@ if __name__ == "__main__":
                              disabled_color="blue", save_location=plot_file_name)
 
         overall_t_end = time.time()
-        print(
-            f"Done! Assigned {len(point_cloud.points)} points to {len(stems)} stems in {overall_t_end-overall_t_start:.2f} seconds!")
+        if stems:
+            print(
+                f"Done! Assigned {len(point_cloud.points)} points to {len(stems)} stems in {overall_t_end-overall_t_start:.2f} seconds!")
+        else:
+            print(f"Quit after failing to find any stems in file {file_name}.")
