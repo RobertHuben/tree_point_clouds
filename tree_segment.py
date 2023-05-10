@@ -348,15 +348,15 @@ def plot_stem_centers(point_cloud, stems, include_ground=True, save_title=None, 
 
 def initialize_arguments():
     parser = argparse.ArgumentParser(
-        description='Clusters points into trees a .las file')
+        description='Clusters points from a .las file into trees.')
     parser.add_argument('-f', '--file_name', required=False, type=str, default="",
                         help='the name of the input file')
     parser.add_argument('-p', '--make_plots', action='store_const', required=False, const=True,
-                        help='whether to save plots')
+                        help='whether to save a birds-eye-view plot of the clustering results')
     parser.add_argument('-sv', '--side_view', required=False, type=int, default=0,
                         help='whether to save a plot with a side view, and at what angle to view it')
     parser.add_argument('-dh', '--descendents_height', required=False, type=float, default=.3,
-                        help='how far to search vertically for descendents')
+                        help='how far to search vertically for descendents when searching for stems')
     parser.add_argument('-of', '--output_folder', required=False, type=str, default="cluster_csvs",
                         help='the name of the folder to save the outputs to')
     args = parser.parse_args()
