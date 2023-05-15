@@ -84,36 +84,6 @@ class Point_Cloud:
             if any([squared_distance(enabled_point, stem_point) < squared_radius_to_delete for stem_point in stem]):
                 enabled_point.enabled = False
 
-    def plot_side_view_of_cloud_and_stem(self, stem=None, disabled_color='green', theta=0, save_location=None):
-        # displays the point cloud from a side view
-        # inputs:
-        #   - stem : a set of points to highlight as the stem
-        #   - disabled_color : the color to draw the disabled points as. If None, will not draw them
-        #   - theta: an angle (in degrees), which rotates the picture
-        plt.close()
-        enabled_point_cloud = self.enabled_points()
-        sin = math.sin(theta*180/math.pi)
-        cos = math.cos(theta*180/math.pi)
-        x = [point.xyz[0]*cos+point.xyz[1]*sin for point in enabled_point_cloud]
-        z = [point.xyz[2] for point in enabled_point_cloud]
-        plt.scatter(x=x, y=z, color='blue')
-        if disabled_color:
-            # plot disabled points in a separate color
-            disabled_point_cloud = filter_for_disabled(self.points)
-            x = [point.xyz[0]*cos+point.xyz[1] *
-                 sin for point in disabled_point_cloud]
-            z = [point.xyz[2] for point in disabled_point_cloud]
-            plt.scatter(x=x, y=z, color=disabled_color)
-        if stem:
-            # plot the stem in red
-            x_stem = [stem_point.xyz[0]*cos +
-                      stem_point.xyz[1]*sin for stem_point in stem]
-            z_stem = [stem_point.xyz[2] for stem_point in stem]
-            plt.scatter(x=x_stem, y=z_stem, color='red')
-        if save_location:
-            # save the figure
-            plt.savefig(fname=f"saved_images/side_views/{save_location}")
-
     def save_via_dataframe(self, file_name="point_clusters.csv", folder_name="cluster_csvs", stems=None):
         # saves this point cloud as a csv with their cluster information
         # inputs:
@@ -308,122 +278,21 @@ def cluster_remaining_points_to_nearest_neighbor(point_cloud):
                             key=lambda x: squared_distance(x, point))
         point.cluster = nearest_point.cluster
 
-
-# def plot_side_view(point_cloud, theta=0, save_title=None, save_folder="saved_images/side_views", ground_points_color="", unclustered_points_color=""):
-#     # visualization method
-#     plt.close()
-
-#     colors = ['blue', 'green', 'purple', 'yellow',
-#               'pink', 'orange', 'cyan', 'maroon', 'brown']
-#     num_colors = len(colors)
-
-#     num_clusters = max([point.cluster for point in point_cloud.points])
-#     sin = math.sin(theta*180/math.pi)
-#     cos = math.cos(theta*180/math.pi)
-
-#     # plot the clusters:
-#     for i in range(-1, num_clusters+1):
-#         if i>0:
-#             # this cluster is a tree
-#             label = f'Tree {i}'
-#             color = colors[i % num_colors]
-#         elif i == -1:
-#             # unclustered points
-#             if not unclustered_points_color:
-#                 continue
-#             label = "Unclustered Points"
-#             color = unclustered_points_color
-#         elif i == 0:
-#             # ground
-#             if not ground_points_color:
-#                 continue
-#             label = "Ground"
-#             color = ground_points_color
-#         points_in_this_cluster = [
-#             point for point in point_cloud.points if point.cluster == i]
-#         x = [point.xyz[0]*cos+point.xyz[1]*sin for point in points_in_this_cluster]
-#         z = [point.xyz[2] for point in points_in_this_cluster]
-#         plt.scatter(
-#             x=x, y=z, color=color, alpha=.2, label=label)
-
-#     leg = plt.legend()
-#     for lh in leg.legendHandles:
-#         lh.set_alpha(1)
-#     plt.title(save_title)
-#     if save_title:
-#         plt.savefig(fname=f"{save_folder}/{save_title}")
-#     plt.close()
-#     return
-
-
-# def plot_top_down_view(point_cloud, stems=[], save_title=None, save_folder="saved_images", ground_points_color="", unclustered_points_color=""):
-#     # Creates and saves a plot from a top-down perspective of the points and their stem centers
-#     # inputs:
-#     #   - point_cloud : the Point_Cloud object to plot
-#     #   - stems : the stems (list of list of points) whose centers will be drawn
-#     #   - save_title : the name to save the image as. if you leave it as None the image won't be saved
-#     #   - save_folder : the folder to save the image to
-#     #   - ground_points_color : the name of the color to make the points in the 'ground' cluster. leave as the empty string to not draw it
-#     #   - unclustered_points_color : the name of the color to make the points in the 'unclustered' cluster. leave as the empty string to not draw it
-
-#     colors = ['blue', 'green', 'purple', 'yellow',
-#               'red', 'orange', 'cyan', 'maroon', 'brown']
-#     num_colors = len(colors)
-
-#     num_clusters = max([point.cluster for point in point_cloud.points])
-#     # plot the clusters:
-#     for i in range(-1, num_clusters+1):
-#         if i>0:
-#             # this cluster is a tree
-#             label = f'Tree {i}'
-#             color = colors[i % num_colors]
-#         elif i == -1:
-#             # unclustered points
-#             if not unclustered_points_color:
-#                 continue
-#             label = "Unclustered Points"
-#             color = unclustered_points_color
-#         elif i == 0:
-#             # ground
-#             if not ground_points_color:
-#                 continue
-#             label = "Ground"
-#             color = ground_points_color
-#         points_in_this_cluster = [
-#             point for point in point_cloud.points if point.cluster == i]
-#         x = [point.xyz[0] for point in points_in_this_cluster]
-#         y = [point.xyz[1] for point in points_in_this_cluster]
-#         plt.scatter(
-#             x=x, y=y, color=color, alpha=.1, label=label)
-            
-#     # plot the stem centers
-#     if stems:
-#         stem_centers = compute_stem_centers(stems)
-#         stem_center_x = [stem_center.xyz[0] for stem_center in stem_centers]
-#         stem_center_y = [stem_center.xyz[1] for stem_center in stem_centers]
-#         plt.scatter(x=stem_center_x, y=stem_center_y,
-#                     color='black', marker='x', label='Stem Centers')
-
-#     leg = plt.legend()
-#     for lh in leg.legendHandles:
-#         lh.set_alpha(1)
-#     plt.title(save_title)
-#     if save_title:
-#         plt.savefig(fname=f"{save_folder}/{save_title}")
-#     plt.close()
-
 def plot_from_angle(point_cloud, side_view_rotation_angle=0, stems=[], save_title=None, save_folder="saved_images", ground_points_color="", unclustered_points_color=""):
     # Creates and saves a plot from a top-down perspective of the points and their stem centers
     # inputs:
     #   - point_cloud : the Point_Cloud object to plot
+    #   - side_view_rotation_angle : number which controls whether the plot is top-down or a side view, and if a side view which angle
+    #        - if 0: top-down plot
+    #        - if >0: side view rotated that many degrees (use side_view_rotation_angle = 360 for "unrotated" side view)
     #   - stems : the stems (list of list of points) whose centers will be drawn
     #   - save_title : the name to save the image as. if you leave it as None the image won't be saved
     #   - save_folder : the folder to save the image to
     #   - ground_points_color : the name of the color to make the points in the 'ground' cluster. leave as the empty string to not draw it
     #   - unclustered_points_color : the name of the color to make the points in the 'unclustered' cluster. leave as the empty string to not draw it
 
-    colors = ['blue', 'green', 'purple', 'yellow',
-              'red', 'orange', 'cyan', 'maroon', 'brown']
+    colors = ['yellow', 'green', 'blue', 'purple', 'red', 
+              'orange', 'cyan', 'brown']
     num_colors = len(colors)
     num_clusters = max([point.cluster for point in point_cloud.points])
     # plot the clusters:
@@ -451,8 +320,8 @@ def plot_from_angle(point_cloud, side_view_rotation_angle=0, stems=[], save_titl
             y = [point.xyz[1] for point in points_in_this_cluster]
             alpha=.1
         else:
-            sin = math.sin(side_view_rotation_angle*180/math.pi)
-            cos = math.cos(side_view_rotation_angle*180/math.pi)
+            sin = math.sin(side_view_rotation_angle*math.pi/180)
+            cos = math.cos(side_view_rotation_angle*math.pi/180)
             x = [point.xyz[0]*cos+point.xyz[1]*sin for point in points_in_this_cluster]
             y = [point.xyz[2] for point in points_in_this_cluster]
             alpha=.2
@@ -481,14 +350,14 @@ def initialize_arguments():
         description='Clusters points from a .las file into trees.')
     parser.add_argument('-f', '--file_name', required=False, type=str, default="",
                         help='the name of the input file')
-    parser.add_argument('-p', '--make_plots', action='store_const', required=False, const=True,
-                        help='whether to save a birds-eye-view plot of the clustering results')
+    parser.add_argument('-td', '--top_down', action='store_const', required=False, const=True,
+                        help='whether to save a top-down plot of the clustering results')
     parser.add_argument('-sv', '--side_view', required=False, type=int, default=0,
-                        help='whether to save a plot with a side view, and at what angle to view it')
+                        help='whether to save a side-view plot of the clustering results, and at what angle to view it. must be >0')
     parser.add_argument('-dh', '--descendents_height', required=False, type=float, default=.3,
                         help='how far to search vertically for descendents when searching for stems')
     parser.add_argument('-of', '--output_folder', required=False, type=str, default="cluster_csvs",
-                        help='the name of the folder to save the outputs to')
+                        help='the name of the folder where csv outputs are saved')
     args = parser.parse_args()
 
     if args.file_name:
@@ -502,18 +371,10 @@ def initialize_arguments():
             # "sample_data/treeID_40113_merged.las", # 3 stems
         ]
         # file_names = [
-        # "Test_data/treeID_10717_merged.las", # 1 stem
-        # "Test_data/treeID_12210.las", # 1 stem
-        # "Test_data/treeID_19707.las", # 1 stem
-        # "Test_data/treeID_33009.las", # 1 stem
-        # "Test_data/treeID_34926_merged.las", # >10 stems
-        # "Test_data/treeID_35618_merged.las", # >10 stems
         # "Test_data/treeID_40038_merged.las", # 2 stems
         # "Test_data/treeID_40061_merged.las", # 13 stems
         # "Test_data/treeID_40113_merged.las", # 3 stems
-        # "Test_data/treeID_40645_merged.las",  # 2 stems
         # "Test_data/treeID_40803_merged.las", # 9ish stems
-        # "Test_data/treeID_42113_merged.las", # 11 stems
         # ]
     return args, file_names
 
@@ -545,7 +406,6 @@ if __name__ == "__main__":
                 stems.append(stem)
                 print(
                     f"I found stem #{len(stems)} in {t_end-t_start:.2f} seconds!")
-                # point_cloud.plot(stem=stem, disabled_color='green', theta=0)
                 point_cloud.disable_stem_region(stem)
             else:
                 print(
@@ -557,10 +417,10 @@ if __name__ == "__main__":
         csv_file_name = f"{file_name_prefix}_clusters.csv"
         point_cloud.save_via_dataframe(
             file_name=csv_file_name, stems=stems, folder_name=args.output_folder)
-        if args.make_plots:
+        if args.top_down:
             plot_file_name = f"{file_name_prefix}_cluster_plot.png"
             plot_from_angle(point_cloud, stems=stems, side_view_rotation_angle=0,
-                               ground_points_color="", save_title=plot_file_name)
+                               ground_points_color="", save_title=plot_file_name, save_folder="saved_images/top_downs")
         if args.side_view:
             plot_file_name = f"{file_name_prefix}_side_view_angle_{args.side_view}.png"
             plot_from_angle(point_cloud, ground_points_color='black',
