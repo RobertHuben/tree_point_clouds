@@ -367,7 +367,11 @@ def initialize_arguments():
         else:
             file_names = [args.file_name]
     else:
-        file_names = [
+        file_names=[
+            "sample_data/treeID_40645_merged.las",  # 2 stems
+            # "sample_data/treeID_40113_merged.las", # 3 stems
+        ]
+        # file_names = [
             # "Test_data/treeID_10717_merged.las", # 1 stem
             # "Test_data/treeID_12210.las", # 1 stem
             # "Test_data/treeID_19707.las", # 1 stem
@@ -377,10 +381,10 @@ def initialize_arguments():
             # "Test_data/treeID_40038_merged.las", # 2 stems
             # "Test_data/treeID_40061_merged.las", # 13 stems
             # "Test_data/treeID_40113_merged.las", # 3 stems
-            "Test_data/treeID_40645_merged.las",  # 2 stems
+            # "Test_data/treeID_40645_merged.las",  # 2 stems
             # "Test_data/treeID_40803_merged.las", # 9ish stems
             # "Test_data/treeID_42113_merged.las", # 11 stems
-        ]
+        # ]
     return args, file_names
 
 
