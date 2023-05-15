@@ -13,6 +13,10 @@ There are 3 steps to the script:
 2. Do an initial clustering pass by "growing" each stem. For each point in the cluster, we add the unclustered points in a cylinder above it to the same cluster, repeating until this adds no more new points to the cluster.
 3. Cluster the remaining points by finding its nearest neighbor that was clustered in step (2) and assigning it to the same cluster.
 
+For each input file, there are two output files (you can also plot the outputs, see below):
+1. In cluster_csvs/ the files ending in _clusters will be a csv file with one row per point, and columns index, x,y, z, height_above_ground, and cluster. Cluster will be an integer, with 0 denoting the ground, each positive number denoting a separate tree, and -1 denoting any unclustered points (if there are any)
+2.  In cluster_csvs/ the files ending in _stem_centers will be a csv file with one row per cluster (usually 1 row for the ground and one row per tree), and columns index, x, y, z, height_above_ground, cluster, and cluster_name. The x,y,z coordinates represent the center of the cluster.
+
 Please don't hesitate to open an [`Issue`](https://github.com/RobertHuben/tree_point_clouds/issues) if you find any problem or suggestions for a new feature.
 
 
@@ -82,7 +86,7 @@ python3 tree_segment.py -f sample_data/treeID_40645_merged.las -sv 360
 _Example 4:_ Saving the output csvs to another folder:
 
 ```
-# create a side view of the trees rotated 90 degrees:
+# saves the csv outputs to the folder example_folder/
 python3 tree_segment.py -f sample_data/treeID_40113_merged.las -of example_folder
 ```
 
