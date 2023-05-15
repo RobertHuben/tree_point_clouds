@@ -9,6 +9,7 @@ import argparse
 import re
 import os
 
+
 class Point_Cloud:
     # object that stores the points in a point cloud, initialized from a las file
     # points can be enabled or disabled, disabled points are ignored when searching for stems
@@ -18,7 +19,8 @@ class Point_Cloud:
             [point[-1] for point in all_data.points.array])
         self.points = [Point(xyz, height) for xyz, height in zip(
             all_data.xyz, height_of_points_above_ground)]
-        self.__enabled_points__ = self.points # internal, to access this use enabled_points()
+        # internal, to access this use enabled_points()
+        self.__enabled_points__ = self.points
         self.verbose = verbose
 
     def enabled_points(self):
@@ -82,8 +84,8 @@ class Point_Cloud:
             if any([squared_distance(enabled_point, stem_point) < squared_radius_to_delete for stem_point in stem]):
                 enabled_point.enabled = False
 
-    def plot(self, stem=None, disabled_color='green', theta=0, save_location=None):
-        # displays the point cloud
+    def plot_side_view_of_cloud_and_stem(self, stem=None, disabled_color='green', theta=0, save_location=None):
+        # displays the point cloud from a side view
         # inputs:
         #   - stem : a set of points to highlight as the stem
         #   - disabled_color : the color to draw the disabled points as. If None, will not draw them
@@ -200,27 +202,27 @@ class Point:
 
 
 def filter_for_enabled(points_list):
-    #filters a list for just the points which are enabled
+    # filters a list for just the points which are enabled
     return [point for point in points_list if point.enabled]
 
 
 def filter_for_disabled(points_list):
-    #filters a list for just the points which are NOT enabled
+    # filters a list for just the points which are NOT enabled
     return [point for point in points_list if not point.enabled]
 
 
 def filter_for_clustered(points_list):
-    #filters a list for just the points which are in a cluster
+    # filters a list for just the points which are in a cluster
     return [point for point in points_list if point.cluster >= 0]
 
 
 def filter_for_clustered_non_ground(points_list):
-    #filters a list for just the points which are in a non-ground cluster
+    # filters a list for just the points which are in a non-ground cluster
     return [point for point in points_list if point.cluster > 0]
 
 
 def filter_for_unclustered(points_list):
-    #filters a list for just the points which are NOT in a cluster
+    # filters a list for just the points which are NOT in a cluster
     return [point for point in points_list if point.cluster < 0]
 
 
@@ -271,11 +273,11 @@ def assign_clusters_by_growing(point_cloud, stems, grow_radius=.2, grow_height=.
         if point.height_above_ground < height_cutoff:
             point.cluster = 0
     # now we "grow" each stem to form the core of our clusters
-    # for each point in the cluster, we add the unclustered points in a cylinder above it to the same cluster, 
+    # for each point in the cluster, we add the unclustered points in a cylinder above it to the same cluster,
     # repeating until this adds no more new points to the cluster
     for i, stem in enumerate(stems):
         t_start = time.time()
-        cluster_number=i+1
+        cluster_number = i+1
         growing_points = [stem_point for stem_point in stem]
         while growing_points:
             unclustered_points = filter_for_unclustered(point_cloud.points)
@@ -307,43 +309,171 @@ def cluster_remaining_points_to_nearest_neighbor(point_cloud):
         point.cluster = nearest_point.cluster
 
 
-def plot_stem_centers(point_cloud, stems, include_ground=True, save_title=None, show_unclustered=False):
-    # visualization method
-    plt.close()
+# def plot_side_view(point_cloud, theta=0, save_title=None, save_folder="saved_images/side_views", ground_points_color="", unclustered_points_color=""):
+#     # visualization method
+#     plt.close()
 
-    stem_centers = compute_stem_centers(stems)
+#     colors = ['blue', 'green', 'purple', 'yellow',
+#               'pink', 'orange', 'cyan', 'maroon', 'brown']
+#     num_colors = len(colors)
+
+#     num_clusters = max([point.cluster for point in point_cloud.points])
+#     sin = math.sin(theta*180/math.pi)
+#     cos = math.cos(theta*180/math.pi)
+
+#     # plot the clusters:
+#     for i in range(-1, num_clusters+1):
+#         if i>0:
+#             # this cluster is a tree
+#             label = f'Tree {i}'
+#             color = colors[i % num_colors]
+#         elif i == -1:
+#             # unclustered points
+#             if not unclustered_points_color:
+#                 continue
+#             label = "Unclustered Points"
+#             color = unclustered_points_color
+#         elif i == 0:
+#             # ground
+#             if not ground_points_color:
+#                 continue
+#             label = "Ground"
+#             color = ground_points_color
+#         points_in_this_cluster = [
+#             point for point in point_cloud.points if point.cluster == i]
+#         x = [point.xyz[0]*cos+point.xyz[1]*sin for point in points_in_this_cluster]
+#         z = [point.xyz[2] for point in points_in_this_cluster]
+#         plt.scatter(
+#             x=x, y=z, color=color, alpha=.2, label=label)
+
+#     leg = plt.legend()
+#     for lh in leg.legendHandles:
+#         lh.set_alpha(1)
+#     plt.title(save_title)
+#     if save_title:
+#         plt.savefig(fname=f"{save_folder}/{save_title}")
+#     plt.close()
+#     return
+
+
+# def plot_top_down_view(point_cloud, stems=[], save_title=None, save_folder="saved_images", ground_points_color="", unclustered_points_color=""):
+#     # Creates and saves a plot from a top-down perspective of the points and their stem centers
+#     # inputs:
+#     #   - point_cloud : the Point_Cloud object to plot
+#     #   - stems : the stems (list of list of points) whose centers will be drawn
+#     #   - save_title : the name to save the image as. if you leave it as None the image won't be saved
+#     #   - save_folder : the folder to save the image to
+#     #   - ground_points_color : the name of the color to make the points in the 'ground' cluster. leave as the empty string to not draw it
+#     #   - unclustered_points_color : the name of the color to make the points in the 'unclustered' cluster. leave as the empty string to not draw it
+
+#     colors = ['blue', 'green', 'purple', 'yellow',
+#               'red', 'orange', 'cyan', 'maroon', 'brown']
+#     num_colors = len(colors)
+
+#     num_clusters = max([point.cluster for point in point_cloud.points])
+#     # plot the clusters:
+#     for i in range(-1, num_clusters+1):
+#         if i>0:
+#             # this cluster is a tree
+#             label = f'Tree {i}'
+#             color = colors[i % num_colors]
+#         elif i == -1:
+#             # unclustered points
+#             if not unclustered_points_color:
+#                 continue
+#             label = "Unclustered Points"
+#             color = unclustered_points_color
+#         elif i == 0:
+#             # ground
+#             if not ground_points_color:
+#                 continue
+#             label = "Ground"
+#             color = ground_points_color
+#         points_in_this_cluster = [
+#             point for point in point_cloud.points if point.cluster == i]
+#         x = [point.xyz[0] for point in points_in_this_cluster]
+#         y = [point.xyz[1] for point in points_in_this_cluster]
+#         plt.scatter(
+#             x=x, y=y, color=color, alpha=.1, label=label)
+            
+#     # plot the stem centers
+#     if stems:
+#         stem_centers = compute_stem_centers(stems)
+#         stem_center_x = [stem_center.xyz[0] for stem_center in stem_centers]
+#         stem_center_y = [stem_center.xyz[1] for stem_center in stem_centers]
+#         plt.scatter(x=stem_center_x, y=stem_center_y,
+#                     color='black', marker='x', label='Stem Centers')
+
+#     leg = plt.legend()
+#     for lh in leg.legendHandles:
+#         lh.set_alpha(1)
+#     plt.title(save_title)
+#     if save_title:
+#         plt.savefig(fname=f"{save_folder}/{save_title}")
+#     plt.close()
+
+def plot_from_angle(point_cloud, side_view_rotation_angle=0, stems=[], save_title=None, save_folder="saved_images", ground_points_color="", unclustered_points_color=""):
+    # Creates and saves a plot from a top-down perspective of the points and their stem centers
+    # inputs:
+    #   - point_cloud : the Point_Cloud object to plot
+    #   - stems : the stems (list of list of points) whose centers will be drawn
+    #   - save_title : the name to save the image as. if you leave it as None the image won't be saved
+    #   - save_folder : the folder to save the image to
+    #   - ground_points_color : the name of the color to make the points in the 'ground' cluster. leave as the empty string to not draw it
+    #   - unclustered_points_color : the name of the color to make the points in the 'unclustered' cluster. leave as the empty string to not draw it
 
     colors = ['blue', 'green', 'purple', 'yellow',
-              'black', 'orange', 'cyan', 'maroon', 'brown']
+              'red', 'orange', 'cyan', 'maroon', 'brown']
     num_colors = len(colors)
-
-    stem_center_x = [stem_center.xyz[0] for stem_center in stem_centers]
-    stem_center_y = [stem_center.xyz[1] for stem_center in stem_centers]
-    plt.scatter(x=stem_center_x, y=stem_center_y,
-                color='red', marker='x', label='Stem Centers')
-
-    for i in range(len(stem_centers)):
-        neighborhood = [
-            point for point in point_cloud.points if point.cluster == i+1]
-        x = [point.xyz[0] for point in neighborhood]
-        y = [point.xyz[1] for point in neighborhood]
+    num_clusters = max([point.cluster for point in point_cloud.points])
+    # plot the clusters:
+    for i in range(-1, num_clusters+1):
+        if i>0:
+            # this cluster is a tree
+            label = f'Tree {i}'
+            color = colors[i % num_colors]
+        elif i == -1:
+            # unclustered points
+            if not unclustered_points_color:
+                continue
+            label = "Unclustered Points"
+            color = unclustered_points_color
+        elif i == 0:
+            # ground
+            if not ground_points_color:
+                continue
+            label = "Ground"
+            color = ground_points_color
+        points_in_this_cluster = [
+            point for point in point_cloud.points if point.cluster == i]
+        if not side_view_rotation_angle:
+            x = [point.xyz[0] for point in points_in_this_cluster]
+            y = [point.xyz[1] for point in points_in_this_cluster]
+            alpha=.1
+        else:
+            sin = math.sin(side_view_rotation_angle*180/math.pi)
+            cos = math.cos(side_view_rotation_angle*180/math.pi)
+            x = [point.xyz[0]*cos+point.xyz[1]*sin for point in points_in_this_cluster]
+            y = [point.xyz[2] for point in points_in_this_cluster]
+            alpha=.2
         plt.scatter(
-            x=x, y=y, color=colors[i % num_colors], alpha=.1, label=f'Tree {i+1}')
-    if show_unclustered:
-        neighborhood = [
-            point for point in point_cloud.points if point.cluster == -1]
-        x = [point.xyz[0] for point in neighborhood]
-        y = [point.xyz[1] for point in neighborhood]
-        plt.scatter(x=x, y=y, color='grey', alpha=.1,
-                    label=f'Unclustered Points')
+            x=x, y=y, color=color, alpha=alpha, label=label)
+            
+    # plot the stem centers
+    if stems:
+        stem_centers = compute_stem_centers(stems)
+        stem_center_x = [stem_center.xyz[0] for stem_center in stem_centers]
+        stem_center_y = [stem_center.xyz[1] for stem_center in stem_centers]
+        plt.scatter(x=stem_center_x, y=stem_center_y,
+                    color='black', marker='x', label='Stem Centers')
 
     leg = plt.legend()
     for lh in leg.legendHandles:
         lh.set_alpha(1)
     plt.title(save_title)
     if save_title:
-        plt.savefig(fname=f"saved_images/{save_title}")
-    return
+        plt.savefig(fname=f"{save_folder}/{save_title}")
+    plt.close()
 
 
 def initialize_arguments():
@@ -367,23 +497,23 @@ def initialize_arguments():
         else:
             file_names = [args.file_name]
     else:
-        file_names=[
+        file_names = [
             "sample_data/treeID_40645_merged.las",  # 2 stems
             # "sample_data/treeID_40113_merged.las", # 3 stems
         ]
         # file_names = [
-            # "Test_data/treeID_10717_merged.las", # 1 stem
-            # "Test_data/treeID_12210.las", # 1 stem
-            # "Test_data/treeID_19707.las", # 1 stem
-            # "Test_data/treeID_33009.las", # 1 stem
-            # "Test_data/treeID_34926_merged.las", # >10 stems
-            # "Test_data/treeID_35618_merged.las", # >10 stems
-            # "Test_data/treeID_40038_merged.las", # 2 stems
-            # "Test_data/treeID_40061_merged.las", # 13 stems
-            # "Test_data/treeID_40113_merged.las", # 3 stems
-            # "Test_data/treeID_40645_merged.las",  # 2 stems
-            # "Test_data/treeID_40803_merged.las", # 9ish stems
-            # "Test_data/treeID_42113_merged.las", # 11 stems
+        # "Test_data/treeID_10717_merged.las", # 1 stem
+        # "Test_data/treeID_12210.las", # 1 stem
+        # "Test_data/treeID_19707.las", # 1 stem
+        # "Test_data/treeID_33009.las", # 1 stem
+        # "Test_data/treeID_34926_merged.las", # >10 stems
+        # "Test_data/treeID_35618_merged.las", # >10 stems
+        # "Test_data/treeID_40038_merged.las", # 2 stems
+        # "Test_data/treeID_40061_merged.las", # 13 stems
+        # "Test_data/treeID_40113_merged.las", # 3 stems
+        # "Test_data/treeID_40645_merged.las",  # 2 stems
+        # "Test_data/treeID_40803_merged.las", # 9ish stems
+        # "Test_data/treeID_42113_merged.las", # 11 stems
         # ]
     return args, file_names
 
@@ -425,15 +555,16 @@ if __name__ == "__main__":
 
         file_name_prefix = file_name.split(".")[0].split("/")[1]
         csv_file_name = f"{file_name_prefix}_clusters.csv"
-        point_cloud.save_via_dataframe(file_name=csv_file_name, stems=stems, folder_name=args.output_folder)
+        point_cloud.save_via_dataframe(
+            file_name=csv_file_name, stems=stems, folder_name=args.output_folder)
         if args.make_plots:
             plot_file_name = f"{file_name_prefix}_cluster_plot.png"
-            plot_stem_centers(point_cloud, stems=stems,
-                              include_ground=False, save_title=plot_file_name)
+            plot_from_angle(point_cloud, stems=stems, side_view_rotation_angle=0,
+                               ground_points_color="", save_title=plot_file_name)
         if args.side_view:
             plot_file_name = f"{file_name_prefix}_side_view_angle_{args.side_view}.png"
-            point_cloud.plot(theta=args.side_view,
-                             disabled_color="blue", save_location=plot_file_name)
+            plot_from_angle(point_cloud, ground_points_color='black',
+                           save_title=plot_file_name, side_view_rotation_angle=args.side_view, save_folder="saved_images/side_views")
 
         overall_t_end = time.time()
         if stems:
