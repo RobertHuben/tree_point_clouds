@@ -32,13 +32,13 @@ class Point_Cloud:
         self.points = [Point(xyz, height) for xyz, height in zip(
             all_data.xyz, height_of_points_above_ground)]
         # internal, to access this use enabled_points()
-        self.__enabled_points__ = self.points
+        self._enabled_points = self.points
         self.verbose = verbose
 
     def enabled_points(self):
         # filters the set of points for just those enabled, then returns that set of enabled points
-        self.__enabled_points__ = filter_for_enabled(self.__enabled_points__)
-        return self.__enabled_points__
+        self._enabled_points = filter_for_enabled(self._enabled_points)
+        return self._enabled_points
 
     def find_highest_point(self):
         # returns the highest point in the point cloud, ie the one with the greatest z coordinate
