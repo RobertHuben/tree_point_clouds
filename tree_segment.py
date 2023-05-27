@@ -1,3 +1,13 @@
+"""Segments point cloud data from a LAS file into individual trees.
+
+This program reads lidar data from a LAS file, identifies clusters of points corresponding to individual trees, and outputs the resulting clusters in a csv file.
+
+In order to identify trees, this algorithm first identifies vertical "stems" which go from the top of a tree to the ground. The remaining points are matched to nearby stems, resulting in one output cluster per stem which should correspond to a single tree.
+
+Example Usage:
+python3 tree_segment.py --file_name sample_data/treeID_40645_merged.las
+"""
+
 import laspy
 import matplotlib.pyplot as plt
 import math
@@ -8,88 +18,106 @@ import pandas as pd
 import argparse
 import re
 import os
+import logging
+
+# logging.basicConfig(level=logging.INFO)
 
 
 class Point_Cloud:
-    # object that stores the points in a point cloud, initialized from a las file
-    # points can be enabled or disabled, disabled points are ignored when searching for stems
-    def __init__(self, file_name, verbose=False):
+    """Object that stores the points in a point cloud, initialized from a las file.
+
+    Points can be enabled or disabled, disabled points are ignored when searching for stems
+    """
+
+    def __init__(self, file_name):
         all_data = laspy.read(file_name)
         height_of_points_above_ground = np.array(
             [point[-1] for point in all_data.points.array])
         self.points = [Point(xyz, height) for xyz, height in zip(
             all_data.xyz, height_of_points_above_ground)]
-        # internal, to access this use enabled_points()
-        self.__enabled_points__ = self.points
-        self.verbose = verbose
-
-    def enabled_points(self):
-        # filters the set of points for just those enabled, then returns that set of enabled points
-        self.__enabled_points__ = filter_for_enabled(self.__enabled_points__)
-        return self.__enabled_points__
+        self.enabled_points = self.points
 
     def find_highest_point(self):
-        # returns the highest point in the point cloud, ie the one with the greatest z coordinate
-        return max(self.enabled_points(), key=lambda point: point.z())
+        """ Returns the highest point in the point cloud, ie the one with the greatest z coordinate."""
+        return max(self.enabled_points, key=lambda point: point.z())
 
     def find_stem(self, min_height=.5, fail_to_find_disable_radius=.2, descendents_height=.3):
-        # returns a stem from the point cloud if it exists, otherwise returns None
-        # the stem will be a list of points in descending z value, starting from above the min height and going down to a ground point
-        # inputs:
-        #   - min_height : the minimum height (in m) for a valid stem
-        #   - fail_to_find_disable_radius : when a point has no descendents, we disable each point within this radius of it
-        #   - descendents_height : the maximum vertical distance allowed to a descendent of this point
-        stem_grounded = False
-        while not(stem_grounded):
-            # the stem starts at the highest point in the cloud
-            stem = [self.find_highest_point()]
-            if stem[0].height_above_ground < min_height:
-                # if your stem is too short, we're done
-                break
-            while not(stem_grounded) and stem:
-                # we try to find a point in a cylinder below this stem
-                active_point = stem[-1]
-                descendents = active_point.find_descendents(
-                    self.enabled_points(), height_below_self=descendents_height)
-                if descendents:
-                    # if there is a valid descendent, take one at random (we can try again later if it doesnt work)
-                    next_point = random.choice(descendents)
-                    stem.append(next_point)
-                    if next_point.is_ground:
-                        stem_grounded = True
-                else:
-                    # if the point has no descendent, it cannot have a path to the ground, so we disable it and all points within fail_to_find_disable_radius of it
-                    n_points_start = len(self.enabled_points())
-                    self.disable_stem_region(
-                        [active_point], fail_to_find_disable_radius)
-                    n_points_end = len(self.enabled_points())
-                    if self.verbose:
-                        print(
-                            f"We disabled {n_points_start-n_points_end} points near this inactive point!")
-                    while stem and not stem[-1].enabled:
-                        stem.pop()
-        if stem_grounded:
-            # we've found a stem
-            if self.verbose:
-                print("Found a stem!")
-            return stem
-        else:
-            # if the point cloud cannot find a new stem, we stop
-            return None
+        """Returns a stem from the point cloud if one exists, otherwise returns None. Disables points during the process.
+
+        The stem will be a list of points in descending z value, starting from above the min height and going down to a ground point
+        inputs:
+          - min_height : the minimum height (in m) for a valid stem
+          - fail_to_find_disable_radius : when a point has no descendents, we disable each point within this radius of it
+          - descendents_height : the maximum vertical distance allowed to a descendent of this point
+        """
+        stem = []
+        while True:
+            """ loop has 6 possible outcomes, in order:
+                1. The highest point is below the stem cutoff height, so there are no more stems and we return None.
+                2. We start a new stem from the highest point (going to top of loop).
+                3. If the active point is disabled, we remove it from the stem (going to top of loop)
+                4. We've found a grounded stem, returning it.
+                5. The latest point has no descendents, so we disable it and nearby points (going to top of loop)
+                6. We add a descendent to the stem (going to the top of loop)
+            """
+            # if the stem is empty, we try to start a new one from the highest point
+            if not stem:
+                highest_point = self.find_highest_point()
+                if highest_point.height_above_ground < min_height:
+                    # every point in the point cloud is below the cutoff, so there are no more stems
+                    # outcome 1:
+                    return None
+                # outcome 2:
+                stem.append(highest_point)
+                continue
+
+            active_point = stem[-1]
+            # check if the active point is ground or disabled, for outcomes 3 or 4:
+            if not active_point.enabled:
+                # outcome 3:
+                stem.pop()
+                continue
+            if active_point.is_ground:
+                logging.info("Found a stem!")
+                # outcome 4:
+                return stem
+
+            # look for a descendent
+            descendents = active_point.find_descendents(
+                self.enabled_points, height_below_self=descendents_height)
+            if not descendents:
+                # if the point has no descendents, it cannot have a path to the ground, so we disable it
+                # we also disable all point within fail_to_find_disable_radius of it, which makes the code run fast, though this could accidentally delete valid stem paths
+                # outcome 5:
+                self.disable_stem_region(
+                    [active_point], fail_to_find_disable_radius)
+                continue
+
+            # if there is a valid descendent, take one at random (we will try again later if it doesnt work)
+            # outcome 6:
+            next_point = random.choice(descendents)
+            stem.append(next_point)
 
     def disable_stem_region(self, stem, radius_to_delete=.7):
-        # disables all points in the point cloud within radius_to_delete distance of a point in the stem
+        """disables all points in the point cloud within radius_to_delete distance of a point in the stem."""
+        n_points_start = len(self.enabled_points)
         squared_radius_to_delete = radius_to_delete**2
-        for enabled_point in self.enabled_points():
+        for enabled_point in self.enabled_points:
             if any([squared_distance(enabled_point, stem_point) < squared_radius_to_delete for stem_point in stem]):
                 enabled_point.enabled = False
+        self.enabled_points = filter_for_enabled(self.enabled_points)
+        n_points_end = len(self.enabled_points)
+        logging.info(
+            f"We disabled {n_points_start-n_points_end} points near this inactive point!")
 
     def save_via_dataframe(self, file_name="point_clusters.csv", folder_name="cluster_csvs", stems=None):
-        # saves this point cloud as a csv with their cluster information
-        # inputs:
-        #   file_name : the file that we save the data to (this will overwrite an old file if it is there)
-        #   folder_name : the folder to save the data to
-        #   stems : optional, a list of list of points, where we'll save the average position of each list into a separate file
+        """Saves this point cloud as a csv with their cluster information.
+
+        inputs:
+          file_name : the file that we save the data to (this will overwrite an old file if it is there)
+          folder_name : the folder to save the data to
+          stems : optional, a list of list of points, where we'll save the average position of each list into a separate file
+        """
         pre_df = [list(point.xyz) + [point.height_above_ground,
                                      point.cluster] for point in self.points]
         # df has one row per point in the pointcloud, with these columns:
@@ -123,12 +151,15 @@ class Point_Cloud:
 
 
 class Point:
-    # a point in the point cloud
+    """An object representing a point in the point cloud."""
 
     def __init__(self, xyz, height_above_ground):
-        # inputs:
-        #   xyz - a 3-item list of x, y, and z coordinates
-        #   height_above_ground - the point's height above ground
+        """ Initializes a Point object.
+
+        inputs:
+          xyz - a 3-item list of x, y, and z coordinates
+          height_above_ground - the point's height above ground
+        """
         self.xyz = xyz
         self.height_above_ground = height_above_ground
         self.is_ground = height_above_ground < 0
@@ -141,7 +172,7 @@ class Point:
         return str(list(self.xyz)+[self.height_above_ground, self.enabled])
 
     def find_descendents(self, points_to_initialize_descendents, horizontal_radius=.2, height_above_self=0, height_below_self=0.3):
-        # finds enabled points in a cylinder below self
+        """Finds enabled points in a cylinder below self."""
         if not self.descendents:
             self.descendents = self.find_points_in_cylinder(
                 points_to_initialize_descendents, horizontal_radius=horizontal_radius, height_above_self=height_above_self, height_below_self=height_below_self)
@@ -149,7 +180,8 @@ class Point:
         return self.descendents
 
     def find_points_in_cylinder(self, points_to_check, horizontal_radius=.2, height_above_self=0, height_below_self=0.3):
-        # finds points in a cylinder around self
+        """Finds points in a cylinder around self."""
+
         # screen for points not too far below
         points_to_check = filter(
             lambda point: -1*height_below_self < point.z()-self.z(), points_to_check)
@@ -167,64 +199,68 @@ class Point:
         return points_in_cylinder
 
     def z(self):
-        # returns the z coordinate of the point
+        """Returns the z coordinate of the point."""
         return self.xyz[2]
 
 
 def filter_for_enabled(points_list):
-    # filters a list for just the points which are enabled
+    """Filters a list for just the points which are enabled."""
     return [point for point in points_list if point.enabled]
 
 
 def filter_for_disabled(points_list):
-    # filters a list for just the points which are NOT enabled
+    """Filters a list for just the points which are NOT enabled."""
     return [point for point in points_list if not point.enabled]
 
 
 def filter_for_clustered(points_list):
-    # filters a list for just the points which are in a cluster
+    """Filters a list for just the points which are in a cluster."""
     return [point for point in points_list if point.cluster >= 0]
 
 
 def filter_for_clustered_non_ground(points_list):
-    # filters a list for just the points which are in a non-ground cluster
+    """Filters a list for just the points which are in a non-ground cluster."""
     return [point for point in points_list if point.cluster > 0]
 
 
 def filter_for_unclustered(points_list):
-    # filters a list for just the points which are NOT in a cluster
+    """Filters a list for just the points which are NOT in a cluster."""
     return [point for point in points_list if point.cluster < 0]
 
 
 def squared_horizontal_distance(point1, point2):
-    # computes the squared horizontal distance between the two points
+    """Computes the squared horizontal distance between the two points."""
     return (point1.xyz[0]-point2.xyz[0])**2+(point1.xyz[1]-point2.xyz[1])**2
 
 
 def squared_distance(point1, point2):
-    # computes the squared distance between the two points
+    """Computes the squared distance between the two points."""
     return (point1.xyz[0]-point2.xyz[0])**2+(point1.xyz[1]-point2.xyz[1])**2+(point1.xyz[2]-point2.xyz[2])**2
 
 
 def downsample(arr, fraction):
-    # selects a random subset of fraction elements in arr
-    # not used, but could be used if you need to speed up the algorithms
+    """Selects a random subset of fraction elements in arr.
+
+    Not used, but could be used if you need to speed up the algorithms
+    """
     np.random.shuffle(arr)
     cutoff_point = int(arr.shape[0]*fraction)
     return arr[:cutoff_point]
 
 
 def compute_stem_centers(stems):
-    # creates a list of points, one point as the "stem center" of each stem in stems
+    """Creates a list of points, one point as the "stem center" of each stem in stems."""
     stem_centers = [
         Point(sum([point.xyz for point in stem])/len(stem), max([point.height_above_ground for point in stem])) for stem in stems]
     return stem_centers
 
 
 def assign_clusters_by_nearest(point_cloud, stems, height_cutoff=0.2):
-    # this method is old, and not recommended, assign_clusters_by_growing() is preferred
-    # assigns every point in the point cloud to its closest stem (as measured by horizontal distance to stem midpoint)
-    # points below height_cutoff are sent to a separate cluster 0 for the ground
+    """Deprecated method, assign_clusters_by_growing() is preferred.
+
+    assigns every point in the point cloud to its closest stem (as measured by horizontal distance to stem midpoint)
+    points below height_cutoff are sent to a separate cluster 0 for the ground
+    """
     stem_centers = compute_stem_centers(stems)
     for point in point_cloud.points:
         if point.height_above_ground < height_cutoff:
@@ -237,8 +273,10 @@ def assign_clusters_by_nearest(point_cloud, stems, height_cutoff=0.2):
 
 
 def assign_clusters_by_growing(point_cloud, stems, grow_radius=.2, grow_height=.4, height_cutoff=0.2):
-    # assigns points to clusters based on "growing" the stem
-    # points below height_cutoff are sent to a separate cluster 0 for the ground
+    """Assigns points to clusters based on "growing" the stem.
+
+    Points below height_cutoff are sent to a separate cluster 0 for the ground
+    """
     for point in point_cloud.points:
         if point.height_above_ground < height_cutoff:
             point.cluster = 0
@@ -255,9 +293,8 @@ def assign_clusters_by_growing(point_cloud, stems, grow_radius=.2, grow_height=.
             # we grow points one at a time
             upwards_points = point_to_grow.find_points_in_cylinder(
                 unclustered_points, horizontal_radius=grow_radius, height_above_self=grow_height, height_below_self=0)
-            if point_cloud.verbose:
-                print(
-                    f"Found {len(upwards_points)} new points for cluster {cluster_number}/{len(stems)}")
+            logging.info(
+                f"Found {len(upwards_points)} new points for cluster {cluster_number}/{len(stems)}")
             for upward_point in upwards_points:
                 upward_point.cluster = cluster_number
                 growing_points.append(upward_point)
@@ -270,7 +307,7 @@ def assign_clusters_by_growing(point_cloud, stems, grow_radius=.2, grow_height=.
 
 
 def cluster_remaining_points_to_nearest_neighbor(point_cloud):
-    # assigns points to existing clusters based on which cluster it is currently closest to
+    """Assigns points to existing clusters based on which cluster it is currently closest to."""
     out_of_cluster_points = filter_for_unclustered(point_cloud.points)
     in_cluster_points = filter_for_clustered_non_ground(point_cloud.points)
     for point in out_of_cluster_points:
@@ -278,26 +315,28 @@ def cluster_remaining_points_to_nearest_neighbor(point_cloud):
                             key=lambda x: squared_distance(x, point))
         point.cluster = nearest_point.cluster
 
-def plot_from_angle(point_cloud, side_view_rotation_angle=0, stems=[], save_title=None, save_folder="saved_images", ground_points_color="", unclustered_points_color=""):
-    # Creates and saves a plot from a top-down perspective of the points and their stem centers
-    # inputs:
-    #   - point_cloud : the Point_Cloud object to plot
-    #   - side_view_rotation_angle : number which controls whether the plot is top-down or a side view, and if a side view which angle
-    #        - if 0: top-down plot
-    #        - if >0: side view rotated that many degrees (use side_view_rotation_angle = 360 for "unrotated" side view)
-    #   - stems : the stems (list of list of points) whose centers will be drawn
-    #   - save_title : the name to save the image as. if you leave it as None the image won't be saved
-    #   - save_folder : the folder to save the image to
-    #   - ground_points_color : the name of the color to make the points in the 'ground' cluster. leave as the empty string to not draw it
-    #   - unclustered_points_color : the name of the color to make the points in the 'unclustered' cluster. leave as the empty string to not draw it
 
-    colors = ['yellow', 'green', 'blue', 'purple', 'red', 
+def plot_from_angle(point_cloud, side_view_rotation_angle=0, stems=[], save_title=None, save_folder="saved_images", ground_points_color="", unclustered_points_color=""):
+    """Creates and saves a plot from a top-down perspective of the points and their stem centers.
+
+    inputs:
+      - point_cloud : the Point_Cloud object to plot
+      - side_view_rotation_angle : number which controls whether the plot is top-down or a side view, and if a side view which angle
+           - if 0: top-down plot
+           - if >0: side view rotated that many degrees (use side_view_rotation_angle = 360 for "unrotated" side view)
+      - stems : the stems (list of list of points) whose centers will be drawn
+      - save_title : the name to save the image as. if you leave it as None the image won't be saved
+      - save_folder : the folder to save the image to
+      - ground_points_color : the name of the color to make the points in the 'ground' cluster. leave as the empty string to not draw it
+      - unclustered_points_color : the name of the color to make the points in the 'unclustered' cluster. leave as the empty string to not draw it"""
+
+    colors = ['yellow', 'green', 'blue', 'purple', 'red',
               'orange', 'cyan', 'brown']
     num_colors = len(colors)
     num_clusters = max([point.cluster for point in point_cloud.points])
     # plot the clusters:
     for i in range(-1, num_clusters+1):
-        if i>0:
+        if i > 0:
             # this cluster is a tree
             label = f'Tree {i}'
             color = colors[i % num_colors]
@@ -318,16 +357,17 @@ def plot_from_angle(point_cloud, side_view_rotation_angle=0, stems=[], save_titl
         if not side_view_rotation_angle:
             x = [point.xyz[0] for point in points_in_this_cluster]
             y = [point.xyz[1] for point in points_in_this_cluster]
-            alpha=.1
+            alpha = .1
         else:
             sin = math.sin(side_view_rotation_angle*math.pi/180)
             cos = math.cos(side_view_rotation_angle*math.pi/180)
-            x = [point.xyz[0]*cos+point.xyz[1]*sin for point in points_in_this_cluster]
+            x = [point.xyz[0]*cos+point.xyz[1] *
+                 sin for point in points_in_this_cluster]
             y = [point.xyz[2] for point in points_in_this_cluster]
-            alpha=.2
+            alpha = .2
         plt.scatter(
             x=x, y=y, color=color, alpha=alpha, label=label)
-            
+
     # plot the stem centers
     if stems:
         stem_centers = compute_stem_centers(stems)
@@ -420,11 +460,11 @@ if __name__ == "__main__":
         if args.top_down:
             plot_file_name = f"{file_name_prefix}_cluster_plot.png"
             plot_from_angle(point_cloud, stems=stems, side_view_rotation_angle=0,
-                               ground_points_color="", save_title=plot_file_name, save_folder="saved_images/top_downs")
+                            ground_points_color="", save_title=plot_file_name, save_folder="saved_images/top_downs")
         if args.side_view:
             plot_file_name = f"{file_name_prefix}_side_view_angle_{args.side_view}.png"
             plot_from_angle(point_cloud, ground_points_color='black',
-                           save_title=plot_file_name, side_view_rotation_angle=args.side_view, save_folder="saved_images/side_views")
+                            save_title=plot_file_name, side_view_rotation_angle=args.side_view, save_folder="saved_images/side_views")
 
         overall_t_end = time.time()
         if stems:
