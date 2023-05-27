@@ -31,18 +31,13 @@ class Point_Cloud:
             [point[-1] for point in all_data.points.array])
         self.points = [Point(xyz, height) for xyz, height in zip(
             all_data.xyz, height_of_points_above_ground)]
-        # internal, to access this use enabled_points()
-        self._enabled_points = self.points
+        self.enabled_points = self.points
         self.verbose = verbose
 
-    def enabled_points(self):
-        # filters the set of points for just those enabled, then returns that set of enabled points
-        self._enabled_points = filter_for_enabled(self._enabled_points)
-        return self._enabled_points
 
     def find_highest_point(self):
         # returns the highest point in the point cloud, ie the one with the greatest z coordinate
-        return max(self.enabled_points(), key=lambda point: point.z())
+        return max(self.enabled_points, key=lambda point: point.z())
 
     def find_stem(self, min_height=.5, fail_to_find_disable_radius=.2, descendents_height=.3):
         # returns a stem from the point cloud if it exists, otherwise returns None
@@ -62,7 +57,7 @@ class Point_Cloud:
                 # we try to find a point in a cylinder below this stem
                 active_point = stem[-1]
                 descendents = active_point.find_descendents(
-                    self.enabled_points(), height_below_self=descendents_height)
+                    self.enabled_points, height_below_self=descendents_height)
                 if descendents:
                     # if there is a valid descendent, take one at random (we can try again later if it doesnt work)
                     next_point = random.choice(descendents)
@@ -71,10 +66,10 @@ class Point_Cloud:
                         stem_grounded = True
                 else:
                     # if the point has no descendent, it cannot have a path to the ground, so we disable it and all points within fail_to_find_disable_radius of it
-                    n_points_start = len(self.enabled_points())
+                    n_points_start = len(self.enabled_points)
                     self.disable_stem_region(
                         [active_point], fail_to_find_disable_radius)
-                    n_points_end = len(self.enabled_points())
+                    n_points_end = len(self.enabled_points)
                     if self.verbose:
                         print(
                             f"We disabled {n_points_start-n_points_end} points near this inactive point!")
@@ -92,9 +87,10 @@ class Point_Cloud:
     def disable_stem_region(self, stem, radius_to_delete=.7):
         # disables all points in the point cloud within radius_to_delete distance of a point in the stem
         squared_radius_to_delete = radius_to_delete**2
-        for enabled_point in self.enabled_points():
+        for enabled_point in self.enabled_points:
             if any([squared_distance(enabled_point, stem_point) < squared_radius_to_delete for stem_point in stem]):
                 enabled_point.enabled = False
+        self.enabled_points = filter_for_enabled(self.enabled_points)
 
     def save_via_dataframe(self, file_name="point_clusters.csv", folder_name="cluster_csvs", stems=None):
         # saves this point cloud as a csv with their cluster information
