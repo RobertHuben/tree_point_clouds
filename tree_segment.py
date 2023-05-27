@@ -1,3 +1,13 @@
+"""Segments point cloud data from a LAS file into individual trees.
+
+This program reads lidar data from a LAS file, identifies clusters of points corresponding to individual trees, and outputs the resulting clusters in a csv file.
+
+In order to identify trees, this algorithm first identifies vertical "stems" which go from the top of a tree to the ground. The remaining points are matched to nearby stems, resulting in one output cluster per stem which should correspond to a single tree.
+
+Example Usage:
+python3 tree_segment.py --file_name sample_data/treeID_40645_merged.las
+"""
+
 import laspy
 import matplotlib.pyplot as plt
 import math
@@ -11,8 +21,10 @@ import os
 
 
 class Point_Cloud:
-    # object that stores the points in a point cloud, initialized from a las file
-    # points can be enabled or disabled, disabled points are ignored when searching for stems
+    """Object that stores the points in a point cloud, initialized from a las file.
+
+    Points can be enabled or disabled, disabled points are ignored when searching for stems
+    """
     def __init__(self, file_name, verbose=False):
         all_data = laspy.read(file_name)
         height_of_points_above_ground = np.array(
