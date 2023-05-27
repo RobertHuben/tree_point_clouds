@@ -18,21 +18,22 @@ import pandas as pd
 import argparse
 import re
 import os
+import logging
 
+# logging.basicConfig(level=logging.INFO)
 
 class Point_Cloud:
     """Object that stores the points in a point cloud, initialized from a las file.
 
     Points can be enabled or disabled, disabled points are ignored when searching for stems
     """
-    def __init__(self, file_name, verbose=False):
+    def __init__(self, file_name):
         all_data = laspy.read(file_name)
         height_of_points_above_ground = np.array(
             [point[-1] for point in all_data.points.array])
         self.points = [Point(xyz, height) for xyz, height in zip(
             all_data.xyz, height_of_points_above_ground)]
         self.enabled_points = self.points
-        self.verbose = verbose
 
 
     def find_highest_point(self):
@@ -66,19 +67,13 @@ class Point_Cloud:
                         stem_grounded = True
                 else:
                     # if the point has no descendent, it cannot have a path to the ground, so we disable it and all points within fail_to_find_disable_radius of it
-                    n_points_start = len(self.enabled_points)
                     self.disable_stem_region(
                         [active_point], fail_to_find_disable_radius)
-                    n_points_end = len(self.enabled_points)
-                    if self.verbose:
-                        print(
-                            f"We disabled {n_points_start-n_points_end} points near this inactive point!")
                     while stem and not stem[-1].enabled:
                         stem.pop()
         if stem_grounded:
             # we've found a stem
-            if self.verbose:
-                print("Found a stem!")
+            logging.info("Found a stem!")
             return stem
         else:
             # if the point cloud cannot find a new stem, we stop
@@ -86,11 +81,14 @@ class Point_Cloud:
 
     def disable_stem_region(self, stem, radius_to_delete=.7):
         # disables all points in the point cloud within radius_to_delete distance of a point in the stem
+        n_points_start = len(self.enabled_points)
         squared_radius_to_delete = radius_to_delete**2
         for enabled_point in self.enabled_points:
             if any([squared_distance(enabled_point, stem_point) < squared_radius_to_delete for stem_point in stem]):
                 enabled_point.enabled = False
         self.enabled_points = filter_for_enabled(self.enabled_points)
+        n_points_end = len(self.enabled_points) 
+        logging.info(f"We disabled {n_points_start-n_points_end} points near this inactive point!")
 
     def save_via_dataframe(self, file_name="point_clusters.csv", folder_name="cluster_csvs", stems=None):
         # saves this point cloud as a csv with their cluster information
@@ -263,8 +261,7 @@ def assign_clusters_by_growing(point_cloud, stems, grow_radius=.2, grow_height=.
             # we grow points one at a time
             upwards_points = point_to_grow.find_points_in_cylinder(
                 unclustered_points, horizontal_radius=grow_radius, height_above_self=grow_height, height_below_self=0)
-            if point_cloud.verbose:
-                print(
+            logging.info(
                     f"Found {len(upwards_points)} new points for cluster {cluster_number}/{len(stems)}")
             for upward_point in upwards_points:
                 upward_point.cluster = cluster_number
