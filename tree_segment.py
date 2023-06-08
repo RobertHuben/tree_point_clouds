@@ -81,7 +81,9 @@ class Point_Cloud:
             if active_point.is_ground:
                 logging.info("Found a stem!")
                 # outcome 4:
-                self.disable_region_near_points(stem, radius_to_disable=found_stem_disable_region)
+                self.disable_region_near_points(
+                    points_to_center_disabling=stem,
+                    radius_to_disable=found_stem_disable_region)
                 return stem
 
             # look for a descendent
@@ -92,7 +94,8 @@ class Point_Cloud:
                 # we also disable all point within fail_to_find_disable_radius of it, which makes the code run fast, though this could accidentally delete valid stem paths
                 # outcome 5:
                 self.disable_region_near_points(
-                    [active_point], fail_to_find_disable_radius)
+                    points_to_center_disabling=[active_point],
+                    radius_to_disable=fail_to_find_disable_radius)
                 continue
 
             # if there is a valid descendent, take one at random (we will try again later if it doesnt work)
@@ -183,7 +186,7 @@ class Point:
 
     def find_points_in_cylinder(self, points_to_check, horizontal_radius, height_above_self, height_below_self):
         """Finds points in a cylinder around self.
-        
+
         inputs:
             self - the point to form the cylinder around
             points_to_check - iterable of points to search over
@@ -428,6 +431,7 @@ def initialize_arguments():
         # ]
     return args, file_names
 
+
 def cluster_point_cloud(point_cloud, args):
     stems = []
     stem = True
@@ -447,6 +451,7 @@ def cluster_point_cloud(point_cloud, args):
     assign_clusters_by_growing(point_cloud, stems)
     return point_cloud, stems
 
+
 if __name__ == "__main__":
 
     args, file_names = initialize_arguments()
@@ -463,7 +468,7 @@ if __name__ == "__main__":
             break
 
         overall_t_start = time.time()
-        point_cloud, stems=cluster_point_cloud(point_cloud, args)
+        point_cloud, stems = cluster_point_cloud(point_cloud, args)
 
         file_name_prefix = file_name.split(".")[0].split("/")[1]
         csv_file_name = f"{file_name_prefix}_clusters.csv"
