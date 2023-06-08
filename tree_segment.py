@@ -41,12 +41,13 @@ class Point_Cloud:
         """ Returns the highest point in the point cloud, ie the one with the greatest z coordinate."""
         return max(self.enabled_points, key=lambda point: point.z())
 
-    def find_stem(self, min_height=.5, fail_to_find_disable_radius=.2, descendents_height=.3):
+    def find_stem(self, min_stem_height=.5, found_stem_disable_region=.7, fail_to_find_disable_radius=.2, descendents_height=.3):
         """Returns a stem from the point cloud if one exists, otherwise returns None. Disables points during the process.
 
         The stem will be a list of points in descending z value, starting from above the min height and going down to a ground point
         inputs:
-          - min_height : the minimum height (in m) for a valid stem
+          - min_stem_height : the minimum height (in m) for a valid stem
+          - found_stem_disable_region : when we find a stem, we disable each point within this distance of a stem point
           - fail_to_find_disable_radius : when a point has no descendents, we disable each point within this radius of it
           - descendents_height : the maximum vertical distance allowed to a descendent of this point
         """
@@ -56,14 +57,14 @@ class Point_Cloud:
                 1. The highest point is below the stem cutoff height, so there are no more stems and we return None.
                 2. We start a new stem from the highest point (going to top of loop).
                 3. If the active point is disabled, we remove it from the stem (going to top of loop)
-                4. We've found a grounded stem, returning it.
+                4. We've found a grounded stem, so we disable the points near to it and return it.
                 5. The latest point has no descendents, so we disable it and nearby points (going to top of loop)
                 6. We add a descendent to the stem (going to the top of loop)
             """
             # if the stem is empty, we try to start a new one from the highest point
             if not stem:
                 highest_point = self.find_highest_point()
-                if highest_point.height_above_ground < min_height:
+                if highest_point.height_above_ground < min_stem_height:
                     # every point in the point cloud is below the cutoff, so there are no more stems
                     # outcome 1:
                     return None
@@ -80,6 +81,7 @@ class Point_Cloud:
             if active_point.is_ground:
                 logging.info("Found a stem!")
                 # outcome 4:
+                self.disable_region_near_points(stem, radius_to_disable=found_stem_disable_region)
                 return stem
 
             # look for a descendent
@@ -438,7 +440,6 @@ def cluster_point_cloud(point_cloud, args):
             stems.append(stem)
             print(
                 f"I found stem #{len(stems)} in {t_end-t_start:.2f} seconds!")
-            point_cloud.disable_region_near_points(stem)
         else:
             print(
                 f"I found that there were no more stems in {t_end-t_start:.2f} seconds!")
