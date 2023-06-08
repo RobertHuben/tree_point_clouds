@@ -426,6 +426,25 @@ def initialize_arguments():
         # ]
     return args, file_names
 
+def cluster_point_cloud(point_cloud, args):
+    stems = []
+    stem = True
+    while stem:
+        t_start = time.time()
+        stem = point_cloud.find_stem(
+            descendents_height=args.descendents_height)
+        t_end = time.time()
+        if stem:
+            stems.append(stem)
+            print(
+                f"I found stem #{len(stems)} in {t_end-t_start:.2f} seconds!")
+            point_cloud.disable_region_near_points(stem)
+        else:
+            print(
+                f"I found that there were no more stems in {t_end-t_start:.2f} seconds!")
+    # assign_clusters_by_nearest(point_cloud,stems)
+    assign_clusters_by_growing(point_cloud, stems)
+    return point_cloud, stems
 
 if __name__ == "__main__":
 
@@ -443,23 +462,7 @@ if __name__ == "__main__":
             break
 
         overall_t_start = time.time()
-        stems = []
-        stem = True
-        while stem:
-            t_start = time.time()
-            stem = point_cloud.find_stem(
-                descendents_height=args.descendents_height)
-            t_end = time.time()
-            if stem:
-                stems.append(stem)
-                print(
-                    f"I found stem #{len(stems)} in {t_end-t_start:.2f} seconds!")
-                point_cloud.disable_region_near_points(stem)
-            else:
-                print(
-                    f"I found that there were no more stems in {t_end-t_start:.2f} seconds!")
-        # assign_clusters_by_nearest(point_cloud,stems)
-        assign_clusters_by_growing(point_cloud, stems)
+        point_cloud, stems=cluster_point_cloud(point_cloud, args)
 
         file_name_prefix = file_name.split(".")[0].split("/")[1]
         csv_file_name = f"{file_name_prefix}_clusters.csv"
