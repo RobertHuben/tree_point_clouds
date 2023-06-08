@@ -41,14 +41,16 @@ class Point_Cloud:
         """ Returns the highest point in the point cloud, ie the one with the greatest z coordinate."""
         return max(self.enabled_points, key=lambda point: point.z())
 
-    def find_stem(self, min_height=.5, fail_to_find_disable_radius=.2, descendents_height=.3):
+    def find_stem(self, minimum_stem_height=.5, found_stem_disable_radius=.7, fail_to_find_disable_radius=.2, descendents_height=.3, descendents_radius=.2):
         """Returns a stem from the point cloud if one exists, otherwise returns None. Disables points during the process.
 
         The stem will be a list of points in descending z value, starting from above the min height and going down to a ground point
         inputs:
-          - min_height : the minimum height (in m) for a valid stem
+          - minimum_stem_height : the minimum height (in m) for a valid stem
+          - found_stem_disable_radius : when we find a stem, we disable each point within this distance of a stem point
           - fail_to_find_disable_radius : when a point has no descendents, we disable each point within this radius of it
           - descendents_height : the maximum vertical distance allowed to a descendent of this point
+          - descendents_radius : the maximum horizontal distance allowed to a descendent of this point
         """
         stem = []
         while True:
@@ -56,14 +58,14 @@ class Point_Cloud:
                 1. The highest point is below the stem cutoff height, so there are no more stems and we return None.
                 2. We start a new stem from the highest point (going to top of loop).
                 3. If the active point is disabled, we remove it from the stem (going to top of loop)
-                4. We've found a grounded stem, returning it.
+                4. We've found a grounded stem, so we disable the points near to it and return it.
                 5. The latest point has no descendents, so we disable it and nearby points (going to top of loop)
                 6. We add a descendent to the stem (going to the top of loop)
             """
             # if the stem is empty, we try to start a new one from the highest point
             if not stem:
                 highest_point = self.find_highest_point()
-                if highest_point.height_above_ground < min_height:
+                if highest_point.height_above_ground < minimum_stem_height:
                     # every point in the point cloud is below the cutoff, so there are no more stems
                     # outcome 1:
                     return None
@@ -80,17 +82,24 @@ class Point_Cloud:
             if active_point.is_ground:
                 logging.info("Found a stem!")
                 # outcome 4:
+                self.disable_region_near_points(
+                    points_to_center_disabling=stem,
+                    radius_to_disable=found_stem_disable_radius)
                 return stem
 
             # look for a descendent
             descendents = active_point.find_descendents(
-                self.enabled_points, height_below_self=descendents_height)
+                points_to_initialize_descendents= self.enabled_points, 
+                height_below_self=descendents_height,
+                horizontal_radius=descendents_radius
+                )
             if not descendents:
                 # if the point has no descendents, it cannot have a path to the ground, so we disable it
                 # we also disable all point within fail_to_find_disable_radius of it, which makes the code run fast, though this could accidentally delete valid stem paths
                 # outcome 5:
-                self.disable_stem_region(
-                    [active_point], fail_to_find_disable_radius)
+                self.disable_region_near_points(
+                    points_to_center_disabling=[active_point],
+                    radius_to_disable=fail_to_find_disable_radius)
                 continue
 
             # if there is a valid descendent, take one at random (we will try again later if it doesnt work)
@@ -98,12 +107,12 @@ class Point_Cloud:
             next_point = random.choice(descendents)
             stem.append(next_point)
 
-    def disable_stem_region(self, stem, radius_to_delete=.7):
-        """disables all points in the point cloud within radius_to_delete distance of a point in the stem."""
+    def disable_region_near_points(self, points_to_center_disabling, radius_to_disable):
+        """Disables all points in the point cloud within radius_to_delete distance of a point in the points_to_center_disabling."""
         n_points_start = len(self.enabled_points)
-        squared_radius_to_delete = radius_to_delete**2
+        squared_radius_to_disable = radius_to_disable**2
         for enabled_point in self.enabled_points:
-            if any([squared_distance(enabled_point, stem_point) < squared_radius_to_delete for stem_point in stem]):
+            if any([squared_distance(enabled_point, disabling_point) < squared_radius_to_disable for disabling_point in points_to_center_disabling]):
                 enabled_point.enabled = False
         self.enabled_points = filter_for_enabled(self.enabled_points)
         n_points_end = len(self.enabled_points)
@@ -171,16 +180,24 @@ class Point:
     def __repr__(self):
         return str(list(self.xyz)+[self.height_above_ground, self.enabled])
 
-    def find_descendents(self, points_to_initialize_descendents, horizontal_radius=.2, height_above_self=0, height_below_self=0.3):
+    def find_descendents(self, points_to_initialize_descendents, horizontal_radius, height_below_self):
         """Finds enabled points in a cylinder below self."""
         if not self.descendents:
             self.descendents = self.find_points_in_cylinder(
-                points_to_initialize_descendents, horizontal_radius=horizontal_radius, height_above_self=height_above_self, height_below_self=height_below_self)
+                points_to_initialize_descendents, horizontal_radius=horizontal_radius, height_above_self=0, height_below_self=height_below_self)
         self.descendents = filter_for_enabled(self.descendents)
         return self.descendents
 
-    def find_points_in_cylinder(self, points_to_check, horizontal_radius=.2, height_above_self=0, height_below_self=0.3):
-        """Finds points in a cylinder around self."""
+    def find_points_in_cylinder(self, points_to_check, horizontal_radius, height_above_self, height_below_self):
+        """Finds points in a cylinder around self.
+
+        inputs:
+            self - the point to form the cylinder around
+            points_to_check - iterable of points to search over
+            horizontal_radius - radius, in meters, of the cylinder to check for
+            height_above_self - the height, in meters, that the cylinder extends vertically above self
+            height_below_self - the height, in meters, that the cylinder extends vertically below self
+        """
 
         # screen for points not too far below
         points_to_check = filter(
@@ -255,15 +272,15 @@ def compute_stem_centers(stems):
     return stem_centers
 
 
-def assign_clusters_by_nearest(point_cloud, stems, height_cutoff=0.2):
+def assign_clusters_by_nearest(point_cloud, stems, ground_height_cutoff=0.2):
     """Deprecated method, assign_clusters_by_growing() is preferred.
 
     assigns every point in the point cloud to its closest stem (as measured by horizontal distance to stem midpoint)
-    points below height_cutoff are sent to a separate cluster 0 for the ground
+    points below ground_height_cutoff are sent to a separate cluster 0 for the ground
     """
     stem_centers = compute_stem_centers(stems)
     for point in point_cloud.points:
-        if point.height_above_ground < height_cutoff:
+        if point.height_above_ground < ground_height_cutoff:
             point.cluster = 0
         else:
             squared_horizontal_distance_to_stem_centers = np.array(
@@ -272,13 +289,13 @@ def assign_clusters_by_nearest(point_cloud, stems, height_cutoff=0.2):
                 np.argmin(squared_horizontal_distance_to_stem_centers)
 
 
-def assign_clusters_by_growing(point_cloud, stems, grow_radius=.2, grow_height=.4, height_cutoff=0.2):
+def assign_clusters_by_growing(point_cloud, stems, grow_radius=.2, grow_height=.4, ground_height_cutoff=0.2):
     """Assigns points to clusters based on "growing" the stem.
 
-    Points below height_cutoff are sent to a separate cluster 0 for the ground
+    Points below ground_height_cutoff are sent to a separate cluster 0 for the ground
     """
     for point in point_cloud.points:
-        if point.height_above_ground < height_cutoff:
+        if point.height_above_ground < ground_height_cutoff:
             point.cluster = 0
     # now we "grow" each stem to form the core of our clusters
     # for each point in the cluster, we add the unclustered points in a cylinder above it to the same cluster,
@@ -396,6 +413,20 @@ def initialize_arguments():
                         help='whether to save a side-view plot of the clustering results, and at what angle to view it. must be >0')
     parser.add_argument('-dh', '--descendents_height', required=False, type=float, default=.3,
                         help='how far to search vertically for descendents when searching for stems')
+    parser.add_argument('-dr', '--descendents_radius', required=False, type=float, default=.2,
+                        help='how far to search horizontally for descendents when searching for stems')
+    parser.add_argument('-msh', '--minimum_stem_height', required=False, type=float, default=.5,
+                        help='minimum height required for a stem to be valid')
+    parser.add_argument('-fsdr', '--found_stem_disable_radius', required=False, type=float, default=.7,
+                        help='points within this distance of a found stem will be disabled')
+    parser.add_argument('-ftfdr', '--fail_to_find_disable_radius', required=False, type=float, default=.2,
+                        help='points within this distance of a point with no path to the ground will be disabled')
+    parser.add_argument('-gr', '--grow_radius', required=False, type=float, default=.2,
+                        help='how far to search horizontally for other points in the tree when "growing"')
+    parser.add_argument('-gh', '--grow_height', required=False, type=float, default=.4,
+                        help='how far to search vertically for other points in the tree when "growing"')
+    parser.add_argument('-ghc', '--ground_height_cutoff', required=False, type=float, default=.2,
+                        help='points below this height will be clustered into the ground cluster')
     parser.add_argument('-of', '--output_folder', required=False, type=str, default="cluster_csvs",
                         help='the name of the folder where csv outputs are saved')
     args = parser.parse_args()
@@ -419,6 +450,34 @@ def initialize_arguments():
     return args, file_names
 
 
+def cluster_point_cloud(point_cloud, args):
+    stems = []
+    stem = True
+    while stem:
+        t_start = time.time()
+        stem = point_cloud.find_stem(
+            minimum_stem_height=args.minimum_stem_height,
+            found_stem_disable_radius=args.found_stem_disable_radius,
+            fail_to_find_disable_radius=args.fail_to_find_disable_radius,
+            descendents_height=args.descendents_height,
+            descendents_radius=args.descendents_radius
+            )
+        t_end = time.time()
+        if stem:
+            stems.append(stem)
+            print(
+                f"I found stem #{len(stems)} in {t_end-t_start:.2f} seconds!")
+        else:
+            print(
+                f"I found that there were no more stems in {t_end-t_start:.2f} seconds!")
+    # assign_clusters_by_nearest(point_cloud,stems)
+    assign_clusters_by_growing(point_cloud, stems,
+                               grow_radius=args.grow_radius,
+                               grow_height=args.grow_height,
+                               ground_height_cutoff=args.ground_height_cutoff)
+    return point_cloud, stems
+
+
 if __name__ == "__main__":
 
     args, file_names = initialize_arguments()
@@ -435,23 +494,7 @@ if __name__ == "__main__":
             break
 
         overall_t_start = time.time()
-        stems = []
-        stem = True
-        while stem:
-            t_start = time.time()
-            stem = point_cloud.find_stem(
-                descendents_height=args.descendents_height)
-            t_end = time.time()
-            if stem:
-                stems.append(stem)
-                print(
-                    f"I found stem #{len(stems)} in {t_end-t_start:.2f} seconds!")
-                point_cloud.disable_stem_region(stem)
-            else:
-                print(
-                    f"I found that there were no more stems in {t_end-t_start:.2f} seconds!")
-        # assign_clusters_by_nearest(point_cloud,stems)
-        assign_clusters_by_growing(point_cloud, stems)
+        point_cloud, stems = cluster_point_cloud(point_cloud, args)
 
         file_name_prefix = file_name.split(".")[0].split("/")[1]
         csv_file_name = f"{file_name_prefix}_clusters.csv"
