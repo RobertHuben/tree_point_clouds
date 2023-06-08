@@ -406,29 +406,29 @@ def initialize_arguments():
     parser = argparse.ArgumentParser(
         description='Clusters points from a .las file into trees.')
     parser.add_argument('-f', '--file_name', required=False, type=str, default="",
-                        help='the name of the input file')
+                        help=f'the name of the input file')
     parser.add_argument('-td', '--top_down', action='store_const', required=False, const=True,
-                        help='whether to save a top-down plot of the clustering results')
+                        help=f'whether to save a top-down plot of the clustering results')
     parser.add_argument('-sv', '--side_view', required=False, type=int, default=0,
-                        help='whether to save a side-view plot of the clustering results, and at what angle to view it. must be >0')
+                        help=f'whether to save a side-view plot of the clustering results, and at what angle to view it. must be >0 (default: 0)')
     parser.add_argument('-dh', '--descendents_height', required=False, type=float, default=.3,
-                        help='how far to search vertically for descendents when searching for stems')
+                        help=f'how far to search vertically for descendents when searching for stems (default: .3m)')
     parser.add_argument('-dr', '--descendents_radius', required=False, type=float, default=.2,
-                        help='how far to search horizontally for descendents when searching for stems')
+                        help=f'how far to search horizontally for descendents when searching for stems (default: .2m)')
     parser.add_argument('-msh', '--minimum_stem_height', required=False, type=float, default=.5,
-                        help='minimum height required for a stem to be valid')
+                        help=f'minimum height required for a stem to be valid (default: .5m)')
     parser.add_argument('-fsdr', '--found_stem_disable_radius', required=False, type=float, default=.7,
-                        help='points within this distance of a found stem will be disabled')
+                        help=f'points within this distance of a found stem will be disabled (default: .7m)')
     parser.add_argument('-ftfdr', '--fail_to_find_disable_radius', required=False, type=float, default=.2,
-                        help='points within this distance of a point with no path to the ground will be disabled')
+                        help=f'points within this distance of a point with no path to the ground will be disabled (default: .2m)')
     parser.add_argument('-gr', '--grow_radius', required=False, type=float, default=.2,
-                        help='how far to search horizontally for other points in the tree when "growing"')
+                        help=f'how far to search horizontally for other points in the tree when "growing" (default: .2m)')
     parser.add_argument('-gh', '--grow_height', required=False, type=float, default=.4,
-                        help='how far to search vertically for other points in the tree when "growing"')
+                        help=f'how far to search vertically for other points in the tree when "growing" (default: .4)')
     parser.add_argument('-ghc', '--ground_height_cutoff', required=False, type=float, default=.2,
-                        help='points below this height will be clustered into the ground cluster')
+                        help=f'points below this height will be clustered into the ground cluster (default: .2m)')
     parser.add_argument('-of', '--output_folder', required=False, type=str, default="cluster_csvs",
-                        help='the name of the folder where csv outputs are saved')
+                        help=f'the name of the folder where csv outputs are saved')
     args = parser.parse_args()
 
     if args.file_name:

@@ -41,25 +41,23 @@ optional arguments:
                         the name of the input file
   -td, --top_down       whether to save a top-down plot of the clustering results
   -sv SIDE_VIEW, --side_view SIDE_VIEW
-                        whether to save a side-view plot of the clustering results, and at what angle to
-                        view it. must be >0
+                        whether to save a side-view plot of the clustering results, and at what angle to view it. must be >0 (default: 0)
   -dh DESCENDENTS_HEIGHT, --descendents_height DESCENDENTS_HEIGHT
-                        how far to search vertically for descendents when searching for stems
+                        how far to search vertically for descendents when searching for stems (default: .3m)
   -dr DESCENDENTS_RADIUS, --descendents_radius DESCENDENTS_RADIUS
-                        how far to search horizontally for descendents when searching for stems
+                        how far to search horizontally for descendents when searching for stems (default: .2m)
   -msh MINIMUM_STEM_HEIGHT, --minimum_stem_height MINIMUM_STEM_HEIGHT
-                        minimum height required for a stem to be valid
+                        minimum height required for a stem to be valid (default: .5m)
   -fsdr FOUND_STEM_DISABLE_RADIUS, --found_stem_disable_radius FOUND_STEM_DISABLE_RADIUS
-                        points within this distance of a found stem will be disabled
+                        points within this distance of a found stem will be disabled (default: .7m)
   -ftfdr FAIL_TO_FIND_DISABLE_RADIUS, --fail_to_find_disable_radius FAIL_TO_FIND_DISABLE_RADIUS
-                        points within this distance of a point with no path to the ground will be
-                        disabled
+                        points within this distance of a point with no path to the ground will be disabled (default: .2m)
   -gr GROW_RADIUS, --grow_radius GROW_RADIUS
-                        how far to search horizontally for other points in the tree when "growing"
+                        how far to search horizontally for other points in the tree when "growing" (default: .2m)
   -gh GROW_HEIGHT, --grow_height GROW_HEIGHT
-                        how far to search vertically for other points in the tree when "growing"
+                        how far to search vertically for other points in the tree when "growing" (default: .4)
   -ghc GROUND_HEIGHT_CUTOFF, --ground_height_cutoff GROUND_HEIGHT_CUTOFF
-                        points below this height will be clustered into the ground cluster
+                        points below this height will be clustered into the ground cluster (default: .2m)
   -of OUTPUT_FOLDER, --output_folder OUTPUT_FOLDER
                         the name of the folder where csv outputs are saved
 ```
