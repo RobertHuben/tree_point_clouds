@@ -89,7 +89,7 @@ class Point_Cloud:
                 # if the point has no descendents, it cannot have a path to the ground, so we disable it
                 # we also disable all point within fail_to_find_disable_radius of it, which makes the code run fast, though this could accidentally delete valid stem paths
                 # outcome 5:
-                self.disable_stem_region(
+                self.disable_region_near_points(
                     [active_point], fail_to_find_disable_radius)
                 continue
 
@@ -98,12 +98,12 @@ class Point_Cloud:
             next_point = random.choice(descendents)
             stem.append(next_point)
 
-    def disable_stem_region(self, stem, radius_to_delete=.7):
-        """disables all points in the point cloud within radius_to_delete distance of a point in the stem."""
+    def disable_region_near_points(self, points_to_center_disabling, radius_to_disable=.7):
+        """Disables all points in the point cloud within radius_to_delete distance of a point in the points_to_center_disabling."""
         n_points_start = len(self.enabled_points)
-        squared_radius_to_delete = radius_to_delete**2
+        squared_radius_to_disable = radius_to_disable**2
         for enabled_point in self.enabled_points:
-            if any([squared_distance(enabled_point, stem_point) < squared_radius_to_delete for stem_point in stem]):
+            if any([squared_distance(enabled_point, disabling_point) < squared_radius_to_disable for disabling_point in points_to_center_disabling]):
                 enabled_point.enabled = False
         self.enabled_points = filter_for_enabled(self.enabled_points)
         n_points_end = len(self.enabled_points)
@@ -179,8 +179,16 @@ class Point:
         self.descendents = filter_for_enabled(self.descendents)
         return self.descendents
 
-    def find_points_in_cylinder(self, points_to_check, horizontal_radius=.2, height_above_self=0, height_below_self=0.3):
-        """Finds points in a cylinder around self."""
+    def find_points_in_cylinder(self, points_to_check, horizontal_radius, height_above_self, height_below_self):
+        """Finds points in a cylinder around self.
+        
+        inputs:
+            self - the point to form the cylinder around
+            points_to_check - iterable of points to search over
+            horizontal_radius - radius, in meters, of the cylinder to check for
+            height_above_self - the height, in meters, that the cylinder extends vertically above self
+            height_below_self - the height, in meters, that the cylinder extends vertically below self
+        """
 
         # screen for points not too far below
         points_to_check = filter(
@@ -446,7 +454,7 @@ if __name__ == "__main__":
                 stems.append(stem)
                 print(
                     f"I found stem #{len(stems)} in {t_end-t_start:.2f} seconds!")
-                point_cloud.disable_stem_region(stem)
+                point_cloud.disable_region_near_points(stem)
             else:
                 print(
                     f"I found that there were no more stems in {t_end-t_start:.2f} seconds!")
