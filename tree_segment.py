@@ -41,15 +41,16 @@ class Point_Cloud:
         """ Returns the highest point in the point cloud, ie the one with the greatest z coordinate."""
         return max(self.enabled_points, key=lambda point: point.z())
 
-    def find_stem(self, min_stem_height=.5, found_stem_disable_region=.7, fail_to_find_disable_radius=.2, descendents_height=.3, descendents_radius=.2):
+    def find_stem(self, minimum_stem_height=.5, found_stem_disable_radius=.7, fail_to_find_disable_radius=.2, descendents_height=.3, descendents_radius=.2):
         """Returns a stem from the point cloud if one exists, otherwise returns None. Disables points during the process.
 
         The stem will be a list of points in descending z value, starting from above the min height and going down to a ground point
         inputs:
-          - min_stem_height : the minimum height (in m) for a valid stem
-          - found_stem_disable_region : when we find a stem, we disable each point within this distance of a stem point
+          - minimum_stem_height : the minimum height (in m) for a valid stem
+          - found_stem_disable_radius : when we find a stem, we disable each point within this distance of a stem point
           - fail_to_find_disable_radius : when a point has no descendents, we disable each point within this radius of it
           - descendents_height : the maximum vertical distance allowed to a descendent of this point
+          - descendents_radius : the maximum horizontal distance allowed to a descendent of this point
         """
         stem = []
         while True:
@@ -64,7 +65,7 @@ class Point_Cloud:
             # if the stem is empty, we try to start a new one from the highest point
             if not stem:
                 highest_point = self.find_highest_point()
-                if highest_point.height_above_ground < min_stem_height:
+                if highest_point.height_above_ground < minimum_stem_height:
                     # every point in the point cloud is below the cutoff, so there are no more stems
                     # outcome 1:
                     return None
@@ -83,7 +84,7 @@ class Point_Cloud:
                 # outcome 4:
                 self.disable_region_near_points(
                     points_to_center_disabling=stem,
-                    radius_to_disable=found_stem_disable_region)
+                    radius_to_disable=found_stem_disable_radius)
                 return stem
 
             # look for a descendent
@@ -412,6 +413,20 @@ def initialize_arguments():
                         help='whether to save a side-view plot of the clustering results, and at what angle to view it. must be >0')
     parser.add_argument('-dh', '--descendents_height', required=False, type=float, default=.3,
                         help='how far to search vertically for descendents when searching for stems')
+    parser.add_argument('-dr', '--descendents_radius', required=False, type=float, default=.2,
+                        help='how far to search horizontally for descendents when searching for stems')
+    parser.add_argument('-msh', '--minimum_stem_height', required=False, type=float, default=.5,
+                        help='minimum height required for a stem to be valid')
+    parser.add_argument('-fsdr', '--found_stem_disable_radius', required=False, type=float, default=.7,
+                        help='points within this distance of a found stem will be disabled')
+    parser.add_argument('-ftfdr', '--fail_to_find_disable_radius', required=False, type=float, default=.2,
+                        help='points within this distance of a point with no path to the ground will be disabled')
+    parser.add_argument('-gr', '--grow_radius', required=False, type=float, default=.2,
+                        help='how far to search horizontally for other points in the tree when "growing"')
+    parser.add_argument('-gh', '--grow_height', required=False, type=float, default=.4,
+                        help='how far to search vertically for other points in the tree when "growing"')
+    parser.add_argument('-ghc', '--ground_height_cutoff', required=False, type=float, default=.2,
+                        help='points below this height will be clustered into the ground cluster')
     parser.add_argument('-of', '--output_folder', required=False, type=str, default="cluster_csvs",
                         help='the name of the folder where csv outputs are saved')
     args = parser.parse_args()
@@ -441,7 +456,12 @@ def cluster_point_cloud(point_cloud, args):
     while stem:
         t_start = time.time()
         stem = point_cloud.find_stem(
-            descendents_height=args.descendents_height)
+            minimum_stem_height=args.minimum_stem_height,
+            found_stem_disable_radius=args.found_stem_disable_radius,
+            fail_to_find_disable_radius=args.fail_to_find_disable_radius,
+            descendents_height=args.descendents_height,
+            descendents_radius=args.descendents_radius
+            )
         t_end = time.time()
         if stem:
             stems.append(stem)
@@ -451,7 +471,10 @@ def cluster_point_cloud(point_cloud, args):
             print(
                 f"I found that there were no more stems in {t_end-t_start:.2f} seconds!")
     # assign_clusters_by_nearest(point_cloud,stems)
-    assign_clusters_by_growing(point_cloud, stems)
+    assign_clusters_by_growing(point_cloud, stems,
+                               grow_radius=args.grow_radius,
+                               grow_height=args.grow_height,
+                               ground_height_cutoff=args.ground_height_cutoff)
     return point_cloud, stems
 
 
