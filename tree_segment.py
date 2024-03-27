@@ -31,8 +31,14 @@ class Point_Cloud:
 
     def __init__(self, file_name):
         all_data = laspy.read(file_name)
-        height_of_points_above_ground = np.array(
-            [point[-1] for point in all_data.points.array])
+        try:
+            height_above_ground_column_index=[column[0] for column in all_data.points.array.dtype.descr].index("HeightAboveGround")
+            height_of_points_above_ground = np.array(
+                [point[height_above_ground_column_index] for point in all_data.points.array])
+        except ValueError:
+            # there is no HeightAboveGround data, so use z data
+            logging.warning(f"Could not find a HeightAboveGround field in the file {file_name}, so we will use z values instead. In this case, z values must be normalized so that z=0 is ground level.")
+            height_of_points_above_ground=[xyz[2] for xyz in all_data.xyz]
         self.points = [Point(xyz, height) for xyz, height in zip(
             all_data.xyz, height_of_points_above_ground)]
         self.enabled_points = self.points
@@ -394,7 +400,7 @@ def plot_from_angle(point_cloud, side_view_rotation_angle=0, stems=[], save_titl
                     color='black', marker='x', label='Stem Centers')
 
     leg = plt.legend()
-    for lh in leg.legendHandles:
+    for lh in leg.legend_handles:
         lh.set_alpha(1)
     plt.title(save_title)
     if save_title:
