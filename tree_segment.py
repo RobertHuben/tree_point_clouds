@@ -488,7 +488,7 @@ if __name__ == "__main__":
             point_cloud = Point_Cloud(file_name)
             print(
                 f"Loaded file {file_name}, attempting to cluster {len(point_cloud.points)} points.")
-        except:
+        except FileNotFoundError:
             print(
                 f"I could not find the file named {file_name}, please try again with a new file.")
             break
@@ -496,7 +496,7 @@ if __name__ == "__main__":
         overall_t_start = time.time()
         point_cloud, stems = cluster_point_cloud(point_cloud, args)
 
-        file_name_prefix = file_name.split(".")[0].split("/")[1]
+        file_name_prefix = file_name.split(".")[0].split("/")[-1]
         csv_file_name = f"{file_name_prefix}_clusters.csv"
         point_cloud.save_via_dataframe(
             file_name=csv_file_name, stems=stems, folder_name=args.output_folder)
